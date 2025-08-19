@@ -2,18 +2,22 @@ from flask import Flask, jsonify, render_template, request, redirect, url_for
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+import os
+import json
 import re
 
 # ================== CONFIG ==================
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SPREADSHEET_ID = "1OzbbXYOoJbco7pM21ook6BSFs-gztSFocZBTip-D3KA"  # <-- tu ID real
-CREDS_FILE = "credenciales.json"
+SPREADSHEET_ID = "1OzbbXYOoJbco7pM21ook6BSFs-gztSFocZBTip-D3KA"
+
+# Leer credenciales desde variable de entorno
+creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 
 # Crea la app de Flask
 app = Flask(__name__)
 
 # Crea el cliente de Google Sheets
-creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
 service = build("sheets", "v4", credentials=creds)
 
 # ================== HELPERS ==================
@@ -132,3 +136,4 @@ def create_today():
 if __name__ == "__main__":
     # Esto solo se usa en local. En Render se usará Gunicorn.
     app.run(debug=True, host="0.0.0.0", port=5000)
+
