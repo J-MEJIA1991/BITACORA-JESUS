@@ -10,9 +10,18 @@ import re
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID = "1OzbbXYOoJbco7pM21ook6BSFs-gztSFocZBTip-D3KA"
 
-# Leer credenciales desde variable de entorno
-creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+# Leer credenciales desde variable de entorno o archivo local
+creds_json = os.getenv("GOOGLE_CREDENTIALS")
+
+if creds_json:
+    # Render → lee desde variable de entorno
+    creds_dict = json.loads(creds_json)
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+else:
+    # Local → usa el archivo credentials.json
+    if not os.path.exists("credentials.json"):
+        raise Exception("❌ No se encontró GOOGLE_CREDENTIALS ni el archivo credentials.json")
+    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 
 # Crea la app de Flask
 app = Flask(__name__)
