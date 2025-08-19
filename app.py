@@ -129,9 +129,6 @@ def create_today():
     return redirect(url_for("index"))
 
 # ================== MAIN ==================
-# 🔹 IMPORTANTE: no iniciar el servidor aquí para producción
-# Gunicorn se encargará de arrancar la app en Render.
 if __name__ == "__main__":
-    # Solo para pruebas locales
+    # Esto solo se usa en local. En Render se usará Gunicorn.
     app.run(debug=True, host="0.0.0.0", port=5000)
-
