@@ -8,6 +8,7 @@ import re
 
 # ================== CONFIG ==================
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+<<<<<<< HEAD
 SPREADSHEET_ID = "1OzbbXYOoJbco7pM21ook6BSFs-gztSFocZBTip-D3KA"
 
 # Leer credenciales desde variable de entorno o archivo local
@@ -22,6 +23,13 @@ else:
     if not os.path.exists("credentials.json"):
         raise Exception("❌ No se encontró GOOGLE_CREDENTIALS ni el archivo credentials.json")
     creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+=======
+SPREADSHEET_ID = "1SDgZRJJZtpFIbinH8A85BIPM1y7sr4LbYbSkwcQ7QRE"  # <-- ID de la hoja de tu hermano
+
+# Leer credenciales desde variable de entorno
+creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+>>>>>>> 1c874ed (Primer commit proyecto Bitácora Sofía)
 
 # Crea la app de Flask
 app = Flask(__name__)
@@ -91,7 +99,6 @@ def create_today():
 
     for fila in values:
         if len(fila) >= 2:
-            # A..E
             nueva_data.append([
                 hoy,      # A: fecha nueva
                 fila[1],  # B: cliente
@@ -99,20 +106,13 @@ def create_today():
                 "",       # D: interés
                 ""        # E: abono
             ])
-            # F: saldo heredado + préstamo con interés - abono
             formulas_f.append([f"='{ultima_hoja}'!F{fila_excel} + C{fila_excel}*(1+D{fila_excel}/100) - E{fila_excel}"])
-            
-            # G: acumulado mensual de préstamos
-            if mes_actual == ultima_hoja[:7]:  
-                # mismo mes → acumular
+            if mes_actual == ultima_hoja[:7]:
                 formulas_g.append([f"='{ultima_hoja}'!G{fila_excel} + C{fila_excel}"])
             else:
-                # nuevo mes → reiniciar
                 formulas_g.append([f"C{fila_excel}"])
-            
             fila_excel += 1
 
-    # Escribir A..E
     if nueva_data:
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
@@ -121,7 +121,6 @@ def create_today():
             body={"values": nueva_data}
         ).execute()
 
-    # Escribir F (fórmulas)
     if formulas_f:
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
@@ -130,7 +129,6 @@ def create_today():
             body={"values": formulas_f}
         ).execute()
 
-    # Escribir G (acumulado préstamos)
     if formulas_g:
         service.spreadsheets().values().update(
             spreadsheetId=SPREADSHEET_ID,
@@ -143,6 +141,10 @@ def create_today():
 
 # ================== MAIN ==================
 if __name__ == "__main__":
+<<<<<<< HEAD
     # Esto solo se usa en local. En Render se usará Gunicorn.
     app.run(debug=True, host="0.0.0.0", port=5000)
 
+=======
+    app.run(debug=True, host="0.0.0.0", port=5000)
+>>>>>>> 1c874ed (Primer commit proyecto Bitácora Sofía)
