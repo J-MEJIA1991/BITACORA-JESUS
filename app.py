@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify, render_template, request, redirect, url_for
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
@@ -126,4 +127,3 @@ def create_today():
 if __name__ == "__main__":
     # Esto solo se usa en local. En Render se usará Gunicorn
     app.run(debug=True, host="0.0.0.0", port=5000)
-
