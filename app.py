@@ -9,7 +9,7 @@ import re
 # ================== CONFIG ==================
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 <<<<<<< HEAD
-SPREADSHEET_ID = "1OzbbXYOoJbco7pM21ook6BSFs-gztSFocZBTip-D3KA"
+SPREADSHEET_ID = "1FOze1-FD8M7o31oxx7zJR2S27mjzjp2D9rrnfGvAOeY"
 
 # Leer credenciales desde variable de entorno o archivo local
 creds_json = os.getenv("GOOGLE_CREDENTIALS")
