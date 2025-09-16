@@ -1,0 +1,17 @@
+@app.route("/caja/salida", methods=["POST"])
+@login_required
+def caja_salida():
+    try:
+        monto = float(request.form.get("monto", 0))
+    except ValueError:
+        flash("Monto inválido", "warning")
+        return redirect(url_for("liquidacion"))
+
+    descripcion = request.form.get("descripcion", "Salida manual").strip()
+    mov = MovimientoCaja(tipo="salida", monto=monto, descripcion=descripcion, fecha=date.today())
+    db.session.add(mov)
+    db.session.commit()
+
+    actualizar_liquidacion_por_movimiento(date.today())
+    flash("Salida registrada en caja 💸", "warning")
+    return redirect(url_for("liquidacion"))

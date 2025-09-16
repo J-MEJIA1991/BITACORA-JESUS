@@ -1,0 +1,16 @@
+@app.route('/caja/entrada', methods=['POST'])
+@login_required
+def caja_entrada():
+    monto = float(request.form.get("monto", 0))
+    descripcion = request.form.get("descripcion", "Entrada manual")
+
+    nueva_caja = Caja(
+        fecha=datetime.utcnow(),
+        monto=monto,
+        descripcion=descripcion
+    )
+    db.session.add(nueva_caja)
+    db.session.commit()
+
+    flash("Entrada de caja registrada correctamente", "success")
+    return redirect(url_for("liquidacion"))

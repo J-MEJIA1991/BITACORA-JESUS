@@ -298,13 +298,11 @@ def nuevo_cliente():
         db.session.add(cliente)
         db.session.flush()
 
-        # registrar préstamo de hoy
         prestamo = Prestamo(cliente_id=cliente.id, monto=monto, fecha=date.today())
         db.session.add(prestamo)
 
-        # Registrar movimiento de caja tipo "salida" cuando se da un préstamo (descuenta caja)
-        descripcion_prestamo = f"Prestamo {cliente.id}:{cliente.nombre}"
-        mov_prestamo = MovimientoCaja(tipo="salida", monto=monto, descripcion=descripcion_prestamo, fecha=date.today())
+        # Registrar movimiento en caja por préstamo (salida de caja)
+        mov_prestamo = MovimientoCaja(tipo="salida", monto=monto, descripcion=f"Préstamo {cliente.nombre}", fecha=date.today())
         db.session.add(mov_prestamo)
 
         db.session.commit()
@@ -379,11 +377,8 @@ def abonar(cliente_id):
 
     ab = Abono(cliente_id=cliente.id, monto=monto_abono, fecha=date.today())
     db.session.add(ab)
-    db.session.flush()  # para que ab.id exista si lo necesitas después
 
-    # registrar en caja como entrada (descripción consistente para identificarlo al borrar)
-    descripcion_abono = f"Abono {cliente.id}:{cliente.nombre}"
-    mov = MovimientoCaja(tipo="entrada", monto=monto_abono, descripcion=descripcion_abono, fecha=date.today())
+    mov = MovimientoCaja(tipo="entrada", monto=monto_abono, descripcion=f"Abono {cliente.nombre}", fecha=date.today())
     db.session.add(mov)
 
     db.session.commit()
@@ -410,20 +405,13 @@ def eliminar_abono(abono_id):
             if otros == 0:
                 cliente.ultimo_abono_fecha = None
 
-    # Buscar y eliminar el movimiento de caja correspondiente al abono
-    descripcion_abono = f"Abono {cliente.id}:{cliente.nombre}" if cliente else None
-    mov = None
-    if descripcion_abono:
-        mov = MovimientoCaja.query.filter_by(
-            tipo="entrada",
-            monto=abono.monto,
-            descripcion=descripcion_abono,
-            fecha=fecha
-        ).first()
-    # Si no se encuentra por descripción (caso raro), intentar por tipo+monto+fecha
-    if not mov:
-        mov = MovimientoCaja.query.filter_by(tipo="entrada", monto=abono.monto, fecha=fecha).first()
-
+    # Buscar el movimiento de caja tipo "entrada" que corresponde a este abono y eliminarlo
+    mov = MovimientoCaja.query.filter_by(
+        tipo="entrada",
+        monto=abono.monto,
+        descripcion=f"Abono {cliente.nombre}",
+        fecha=fecha
+    ).first()
     if mov:
         db.session.delete(mov)
 
@@ -545,25 +533,23 @@ def eliminar_prestamo(prestamo_id):
     cliente = prestamo.cliente
     fecha = prestamo.fecha
 
-    # Buscar y eliminar movimiento de caja tipo "salida" correspondiente al préstamo
-    descripcion_prestamo = f"Prestamo {cliente.id}:{cliente.nombre}" if cliente else None
-    mov = None
-    if descripcion_prestamo:
-        mov = MovimientoCaja.query.filter_by(
-            tipo="salida",
-            monto=prestamo.monto,
-            descripcion=descripcion_prestamo,
-            fecha=fecha
-        ).first()
-    # fallback: por tipo+monto+fecha si no encontramos por descripción exacta
-    if not mov:
-        mov = MovimientoCaja.query.filter_by(tipo="salida", monto=prestamo.monto, fecha=fecha).first()
+    if cliente:
+        # Si el préstamo estaba sumado al saldo del cliente, restarlo
+        # (ej: préstamo inicial que aumentó saldo). Evitar saldo negativo.
+        cliente.saldo -= prestamo.monto
+        if cliente.saldo < 0:
+            cliente.saldo = 0
 
-    if mov:
-        db.session.delete(mov)
+    # Buscar y eliminar el movimiento de caja tipo "salida" correspondiente al préstamo
+    mov_prestamo = MovimientoCaja.query.filter_by(
+        tipo="salida",
+        monto=prestamo.monto,
+        descripcion=f"Préstamo {cliente.nombre}",
+        fecha=fecha
+    ).first()
+    if mov_prestamo:
+        db.session.delete(mov_prestamo)
 
-    # No modificamos cliente.saldo aquí (si quieres otro comportamiento, lo podemos ajustar),
-    # simplemente eliminamos el registro de préstamo y revertimos la caja.
     db.session.delete(prestamo)
     db.session.commit()
     actualizar_liquidacion_por_movimiento(fecha)
@@ -596,51 +582,66 @@ def api_detalle_prestamos(fecha):
 
 
 # ---------------------------
-# GASTOS / MOVIMIENTOS DE CAJA
+# MOVIMIENTOS DE CAJA (entrada/salida/gasto)
 # ---------------------------
-@app.route("/nuevo_gasto", methods=["GET", "POST"])
+@app.route("/caja/entrada", methods=["POST"])
 @login_required
-def nuevo_gasto():
-    if request.method == "POST":
-        try:
-            monto = float(request.form.get("monto", 0))
-        except ValueError:
-            flash("Monto inválido", "warning")
-            return redirect(url_for("nuevo_gasto"))
-        desc = request.form.get("descripcion", "").strip()
-
-        mov = MovimientoCaja(tipo="gasto", monto=monto, descripcion=desc, fecha=date.today())
-        db.session.add(mov)
-        db.session.commit()
-        actualizar_liquidacion_por_movimiento(date.today())
-        flash("Gasto registrado", "success")
+def caja_entrada():
+    try:
+        monto = float(request.form.get("monto", 0))
+    except ValueError:
+        flash("Monto inválido", "warning")
         return redirect(url_for("liquidacion"))
-    return render_template("nuevo_gasto.html")
+    if monto <= 0:
+        flash("Monto debe ser mayor a 0", "warning")
+        return redirect(url_for("liquidacion"))
+    descripcion = request.form.get("descripcion", "Entrada manual")
+    mov = MovimientoCaja(tipo="entrada", monto=monto, descripcion=descripcion, fecha=date.today())
+    db.session.add(mov)
+    db.session.commit()
+    actualizar_liquidacion_por_movimiento(date.today())
+    flash("Entrada registrada en caja", "success")
+    return redirect(url_for("liquidacion"))
 
 
-@app.route("/nuevo_movimiento", methods=["GET", "POST"])
+@app.route("/caja/salida", methods=["POST"])
 @login_required
-def nuevo_movimiento():
-    if request.method == "POST":
-        tipo = request.form.get("tipo")
-        try:
-            monto = float(request.form.get("monto", 0))
-        except ValueError:
-            flash("Monto inválido", "warning")
-            return redirect(url_for("nuevo_movimiento"))
-        desc = request.form.get("descripcion", "").strip()
-
-        if tipo not in ["entrada", "salida"]:
-            flash("Tipo inválido", "warning")
-            return redirect(url_for("nuevo_movimiento"))
-
-        mov = MovimientoCaja(tipo=tipo, monto=monto, descripcion=desc, fecha=date.today())
-        db.session.add(mov)
-        db.session.commit()
-        actualizar_liquidacion_por_movimiento(date.today())
-        flash("Movimiento registrado", "success")
+def caja_salida():
+    try:
+        monto = float(request.form.get("monto", 0))
+    except ValueError:
+        flash("Monto inválido", "warning")
         return redirect(url_for("liquidacion"))
-    return render_template("nuevo_movimiento.html")
+    if monto <= 0:
+        flash("Monto debe ser mayor a 0", "warning")
+        return redirect(url_for("liquidacion"))
+    descripcion = request.form.get("descripcion", "Salida manual")
+    mov = MovimientoCaja(tipo="salida", monto=monto, descripcion=descripcion, fecha=date.today())
+    db.session.add(mov)
+    db.session.commit()
+    actualizar_liquidacion_por_movimiento(date.today())
+    flash("Salida registrada en caja", "success")
+    return redirect(url_for("liquidacion"))
+
+
+@app.route("/caja/gasto", methods=["POST"])
+@login_required
+def caja_gasto():
+    try:
+        monto = float(request.form.get("monto", 0))
+    except ValueError:
+        flash("Monto inválido", "warning")
+        return redirect(url_for("liquidacion"))
+    if monto <= 0:
+        flash("Monto debe ser mayor a 0", "warning")
+        return redirect(url_for("liquidacion"))
+    descripcion = request.form.get("descripcion", "Gasto")
+    mov = MovimientoCaja(tipo="gasto", monto=monto, descripcion=descripcion, fecha=date.today())
+    db.session.add(mov)
+    db.session.commit()
+    actualizar_liquidacion_por_movimiento(date.today())
+    flash("Gasto registrado en caja", "success")
+    return redirect(url_for("liquidacion"))
 
 
 # ---------------------------
@@ -659,4 +660,3 @@ with app.app_context():
 if __name__ == "__main__":
     # modo debug local
     app.run(debug=True)
-
