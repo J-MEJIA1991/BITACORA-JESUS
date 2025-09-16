@@ -195,7 +195,7 @@ def cliente_estado_class(cliente: Cliente):
             return "table-success"
         if cliente.ultimo_abono_fecha == hoy:
             # Abonó hoy: marcamos info (azul claro) — el requerimiento pedía verde dentro de la fila del input,
-            # aquí devolvemos clase para toda la fila si lo prefieres.
+            # aquí devolvemos clase para toda la fila si lo prefieras.
             return "table-info"
         if hoy > venc + timedelta(days=30):
             return "table-danger"
@@ -510,6 +510,27 @@ def detalle_prestamos(fecha):
         return redirect(url_for("liquidacion"))
     prestamos = Prestamo.query.filter_by(fecha=f).all()
     return render_template("detalle_prestamos.html", prestamos=prestamos, fecha=f)
+
+
+# ---------------------------
+# ELIMINAR PRÉSTAMO (NUEVO)
+# ---------------------------
+@app.route("/eliminar_prestamo/<int:prestamo_id>", methods=["POST"])
+@login_required
+def eliminar_prestamo(prestamo_id):
+    prestamo = Prestamo.query.get_or_404(prestamo_id)
+    cliente = prestamo.cliente
+    if cliente:
+        # si el préstamo aún estaba sumado al saldo, se descuenta
+        cliente.saldo -= prestamo.monto
+        if cliente.saldo < 0:
+            cliente.saldo = 0
+    fecha = prestamo.fecha
+    db.session.delete(prestamo)
+    db.session.commit()
+    actualizar_liquidacion_por_movimiento(fecha)
+    flash("Préstamo eliminado correctamente", "success")
+    return redirect(url_for("liquidacion"))
 
 
 @app.route("/api/detalle/abonos/<fecha>")
