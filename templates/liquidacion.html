@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>📊 Liquidación</h2>
+
+    <!-- Botones de Caja -->
+    <div class="d-flex justify-content-end mb-3">
+        <!-- Entrada -->
+        <form action="{{ url_for('caja_entrada') }}" method="POST" class="me-2 d-flex">
+            <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control form-control-sm me-1" required>
+            <input type="text" name="descripcion" placeholder="Descripción" class="form-control form-control-sm me-1">
+            <button type="submit" class="btn btn-success btn-sm">💰 Entrada</button>
+        </form>
+
+        <!-- Salida -->
+        <form action="{{ url_for('caja_salida') }}" method="POST" class="me-2 d-flex">
+            <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control form-control-sm me-1" required>
+            <input type="text" name="descripcion" placeholder="Descripción" class="form-control form-control-sm me-1">
+            <button type="submit" class="btn btn-warning btn-sm">💸 Salida</button>
+        </form>
+
+        <!-- Gasto -->
+        <form action="{{ url_for('caja_gasto') }}" method="POST" class="d-flex">
+            <input type="number" name="monto" step="0.01" placeholder="Monto" class="form-control form-control-sm me-1" required>
+            <input type="text" name="descripcion" placeholder="Descripción" class="form-control form-control-sm me-1">
+            <button type="submit" class="btn btn-danger btn-sm">🧾 Gasto</button>
+        </form>
+    </div>
+
+    <!-- Buscador de rango de fechas -->
+    <form method="GET" class="row g-3 mb-3">
+        <div class="col-md-4">
+            <input type="date" name="fecha_inicio" class="form-control" value="{{ request.args.get('fecha_inicio', '') }}">
+        </div>
+        <div class="col-md-4">
+            <input type="date" name="fecha_fin" class="form-control" value="{{ request.args.get('fecha_fin', '') }}">
+        </div>
+        <div class="col-md-4">
+            <button type="submit" class="btn btn-primary">🔍 Buscar</button>
+        </div>
+    </form>
+
+    <!-- Resumen si hay rango -->
+    {% if resumen_rango %}
+    <div class="alert alert-info">
+        <strong>Resumen del {{ resumen_rango.desde }} al {{ resumen_rango.hasta }}</strong><br>
+        Total abonos: {{ "%.2f"|format(resumen_rango.total_abonos) }} |
+        Total préstamos: {{ "%.2f"|format(resumen_rango.total_prestamos) }} |
+        Caja final: {{ "%.2f"|format(resumen_rango.caja) }} |
+        Paquete final: {{ "%.2f"|format(resumen_rango.paquete) }}
+    </div>
+    {% endif %}
+
+    <!-- Tabla de liquidaciones -->
+    <table class="table table-bordered table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Fecha</th>
+                <th>Abonos</th>
+                <th>Préstamos</th>
+                <th>Caja</th>
+                <th>Paquete</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for liq in liquidaciones %}
+            <tr>
+                <td>{{ liq.fecha.strftime("%d/%m/%Y") }}</td>
+                <td>
+                    <a href="{{ url_for('detalle_abonos', fecha=liq.fecha.isoformat()) }}">
+                        {{ "%.2f"|format(liq.total_abonos) }}
+                    </a>
+                </td>
+                <td>
+                    <a href="{{ url_for('detalle_prestamos', fecha=liq.fecha.isoformat()) }}">
+                        {{ "%.2f"|format(liq.total_prestamos) }}
+                    </a>
+                </td>
+                <td>{{ "%.2f"|format(liq.caja) }}</td>
+                <td>{{ "%.2f"|format(liq.paquete) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center">No hay registros</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Detalle de Préstamos - {{ fecha.strftime("%d/%m/%Y") }}</h2>
+
+  {% if prestamos %}
+  <table class="table table-bordered table-hover mt-3">
+    <thead class="table-dark">
+      <tr>
+        <th>Cliente</th>
+        <th>Monto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for prestamo in prestamos %}
+      <tr>
+        <td>{{ prestamo.cliente.nombre }}</td>
+        <td>{{ "%.2f"|format(prestamo.monto) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-warning mt-3">No hubo préstamos en esta fecha.</div>
+  {% endif %}
+
+  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">Volver</a>
+</div>
+{% endblock %}

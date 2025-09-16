@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Detalle de Abonos - {{ fecha.strftime("%d/%m/%Y") }}</h2>
+
+  {% if abonos %}
+  <table class="table table-bordered table-hover mt-3">
+    <thead class="table-dark">
+      <tr>
+        <th>Cliente</th>
+        <th>Monto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for abono in abonos %}
+      <tr>
+        <td>{{ abono.cliente.nombre }}</td>
+        <td>{{ "%.2f"|format(abono.monto) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-warning mt-3">No hubo abonos en esta fecha.</div>
+  {% endif %}
+
+  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">Volver</a>
+</div>
+{% endblock %}

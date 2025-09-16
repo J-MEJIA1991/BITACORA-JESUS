@@ -1,53 +1,74 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Almacén Aitana</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-        }
-        h1 {
-            color: #2c3e50;
-        }
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            margin: 10px 0;
-            background-color: #3498db;
-            color: white;
-            border-radius: 5px;
-            text-decoration: none;
-        }
-        .btn:hover {
-            background-color: #2980b9;
-        }
-        .mensaje {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #27ae60;
-            background-color: #ecf9f1;
-            color: #27ae60;
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
-    <h1>📦 Almacén Aitana</h1>
-    <p>Gestión de inventario diario.</p>
+{% extends "base.html" %}
 
-    <!-- Botón para crear la hoja -->
-    <form action="/crear-hoja" method="POST">
-        <button type="submit" class="btn">➕ Crear hoja de hoy</button>
-    </form>
+{% block title %}Inicio{% endblock %}
 
-    <!-- Mensaje de confirmación -->
-    {% if request.args.get('mensaje') %}
-    <div class="mensaje">
-        {{ request.args.get('mensaje') }}
-    </div>
-    {% endif %}
-</body>
-</html>
+{% block content %}
+  <h2 class="mb-4">Listado de Clientes</h2>
+
+  <div class="mb-3">
+    <a class="btn btn-primary" href="{{ url_for('nuevo_cliente') }}">➕ Nuevo Cliente</a>
+    <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
+  </div>
+
+  <p><strong>Hoy:</strong> {{ hoy.strftime("%d/%m/%Y") }}</p>
+
+  {% if clientes %}
+    <table class="table table-bordered table-hover align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Orden</th>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Dirección</th>
+          <th>Monto</th>
+          <th>Plazo (días)</th>
+          <th>Interés (%)</th>
+          <th>Saldo</th>
+          <th>C (Abono hoy)</th> <!-- 👈 nueva columna -->
+          <th>Fecha creación</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+          <tr class="{{ estado_class(c) }}">
+            <td>
+              <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex">
+                <input type="number" name="orden" value="{{ c.orden }}" class="form-control form-control-sm small-input" />
+                <button type="submit" class="btn btn-sm btn-outline-primary">✔</button>
+              </form>
+            </td>
+            <td>{{ c.codigo }}</td>
+            <td>{{ c.nombre }}</td>
+            <td>{{ c.direccion }}</td>
+            <td>{{ "%.2f"|format(c.monto) }}</td>
+            <td>{{ c.plazo }}</td>
+            <td>{{ "%.2f"|format(c.interes) }}</td>
+            <td>{{ "%.2f"|format(c.saldo) }}</td>
+            <td>
+              {% if c.abono_hoy %}
+                ✅
+              {% else %}
+                ❌
+              {% endif %}
+            </td>
+            <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+            <td>
+              <form action="{{ url_for('abonar', cliente_id=c.id) }}" method="post" class="d-flex mb-1">
+                <input type="number" step="0.01" name="monto_abono" class="form-control form-control-sm small-input" placeholder="Abono">
+                <button type="submit" class="btn btn-sm btn-success">💵 Abonar</button>
+              </form>
+
+              <form action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
+                <button type="submit" class="btn btn-sm btn-danger">🗑 Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="alert alert-info">No hay clientes registrados todavía.</div>
+  {% endif %}
+{% endblock %}
 

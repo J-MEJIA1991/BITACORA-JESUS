@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Buscar Liquidación por Rango de Fechas</h2>
+
+  <form method="POST" class="row g-3 mt-3">
+    <div class="col-md-5">
+      <label for="fecha_inicio" class="form-label">Desde</label>
+      <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" required>
+    </div>
+    <div class="col-md-5">
+      <label for="fecha_fin" class="form-label">Hasta</label>
+      <input type="date" name="fecha_fin" id="fecha_fin" class="form-control" required>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100">Buscar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

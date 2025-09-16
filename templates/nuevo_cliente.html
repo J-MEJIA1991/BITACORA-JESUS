@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Nuevo Cliente{% endblock %}
+{% block content %}
+<h2>Nuevo Cliente</h2>
+
+<form action="{{ url_for('nuevo_cliente') }}" method="post" class="row g-3">
+  <div class="col-md-2">
+    <label for="orden" class="form-label">Orden</label>
+    <input type="number" class="form-control" id="orden" name="orden" required>
+  </div>
+
+  <div class="col-md-4">
+    <label for="nombre" class="form-label">Nombre</label>
+    <input type="text" class="form-control" id="nombre" name="nombre" required>
+  </div>
+
+  <div class="col-md-6">
+    <label for="direccion" class="form-label">Dirección</label>
+    <input type="text" class="form-control" id="direccion" name="direccion">
+  </div>
+
+  <div class="col-md-4">
+    <label for="monto" class="form-label">Monto</label>
+    <input type="number" step="0.01" class="form-control" id="monto" name="monto" required>
+  </div>
+
+  <div class="col-md-4">
+    <label for="plazo" class="form-label">Plazo (días)</label>
+    <input type="number" class="form-control" id="plazo" name="plazo" required>
+  </div>
+
+  <div class="col-md-4">
+    <label for="interes" class="form-label">Interés (%)</label>
+    <input type="number" step="0.01" class="form-control" id="interes" name="interes" required>
+  </div>
+
+  <div class="col-12">
+    <button type="submit" class="btn btn-success">Guardar Cliente</button>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+

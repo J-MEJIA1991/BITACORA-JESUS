@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Inicio{% endblock %}
+{% block content %}
+<h2>Inicio - Resumen</h2>
+<p>Resumen rápido de clientes (mismo listado que en Index).</p>
+<table class="table table-sm table-bordered">
+  <thead>
+    <tr><th>Código</th><th>Nombre</th><th>Saldo</th></tr>
+  </thead>
+  <tbody>
+    {% for c in clientes %}
+    <tr><td>{{ c.codigo }}</td><td>{{ c.nombre }}</td><td>{{ "%.2f"|format(c.saldo) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

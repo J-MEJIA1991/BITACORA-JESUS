@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h2>Dashboard</h2>
+<div class="row">
+  <div class="col-md-4">
+    <div class="card p-3">
+      <h5>Total clientes</h5>
+      <h3>{{ total_clientes }}</h3>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3">
+      <h5>Total abonos</h5>
+      <h3>{{ "%.2f"|format(total_abonos) }}</h3>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3">
+      <h5>Total préstamos</h5>
+      <h3>{{ "%.2f"|format(total_prestamos) }}</h3>
+    </div>
+  </div>
+</div>
+{% endblock %}
