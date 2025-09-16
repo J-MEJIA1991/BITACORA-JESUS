@@ -20,7 +20,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 # Credenciales (fijas según tu preferencia previa)
-VALID_USER = "J-Mejia"
+VALID_USER = "M-Jesus"
 VALID_PASS = "honny1991"
 
 # ---------------------------
@@ -615,3 +615,5 @@ with app.app_context():
 if __name__ == "__main__":
     # modo debug local
     app.run(debug=True)
+
+

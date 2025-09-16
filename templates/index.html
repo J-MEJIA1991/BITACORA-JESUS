@@ -18,49 +18,64 @@
         <tr>
           <th>Orden</th>
           <th>Código</th>
+          <th>Fecha</th>
           <th>Nombre</th>
-          <th>Dirección</th>
           <th>Monto</th>
-          <th>Plazo (días)</th>
-          <th>Interés (%)</th>
+          <th>Abono</th>
           <th>Saldo</th>
-          <th>C (Abono hoy)</th> <!-- 👈 nueva columna -->
-          <th>Fecha creación</th>
-          <th>Acciones</th>
+          <th>Eliminar</th>
         </tr>
       </thead>
       <tbody>
         {% for c in clientes %}
           <tr class="{{ estado_class(c) }}">
-            <td>
+            <!-- Orden -->
+            <td style="width:110px;">
               <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex">
-                <input type="number" name="orden" value="{{ c.orden }}" class="form-control form-control-sm small-input" />
-                <button type="submit" class="btn btn-sm btn-outline-primary">✔</button>
+                <input type="number" name="orden" value="{{ c.orden }}" 
+                       class="form-control" 
+                       style="font-size:1.2rem; padding:8px; text-align:center;" />
+                <button type="submit" 
+                        class="btn btn-outline-primary ms-1" 
+                        style="font-size:1rem; padding:8px 12px;">✔</button>
               </form>
             </td>
-            <td>{{ c.codigo }}</td>
-            <td>{{ c.nombre }}</td>
-            <td>{{ c.direccion }}</td>
-            <td>{{ "%.2f"|format(c.monto) }}</td>
-            <td>{{ c.plazo }}</td>
-            <td>{{ "%.2f"|format(c.interes) }}</td>
-            <td>{{ "%.2f"|format(c.saldo) }}</td>
-            <td>
-              {% if c.abono_hoy %}
-                ✅
-              {% else %}
-                ❌
-              {% endif %}
-            </td>
-            <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
-            <td>
-              <form action="{{ url_for('abonar', cliente_id=c.id) }}" method="post" class="d-flex mb-1">
-                <input type="number" step="0.01" name="monto_abono" class="form-control form-control-sm small-input" placeholder="Abono">
-                <button type="submit" class="btn btn-sm btn-success">💵 Abonar</button>
-              </form>
 
-              <form action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}" method="post" onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
-                <button type="submit" class="btn btn-sm btn-danger">🗑 Eliminar</button>
+            <!-- Código -->
+            <td>{{ c.codigo }}</td>
+
+            <!-- Fecha -->
+            <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+
+            <!-- Nombre -->
+            <td>{{ c.nombre }}</td>
+
+            <!-- Monto -->
+            <td>{{ "%.2f"|format(c.monto) }}</td>
+
+            <!-- Abono -->
+            <td style="width:140px;">
+              <form action="{{ url_for('abonar', cliente_id=c.id) }}" method="post" class="d-flex">
+                <input type="number" step="0.01" name="monto_abono" value="0"
+                       class="form-control" 
+                       style="font-size:1.2rem; padding:8px; text-align:right;" />
+                <button type="submit" 
+                        class="btn btn-success ms-1" 
+                        style="font-size:1rem; padding:8px 12px;">💵</button>
+              </form>
+            </td>
+
+            <!-- Saldo -->
+            <td>{{ "%.2f"|format(c.saldo) }}</td>
+
+            <!-- Eliminar cliente -->
+            <td>
+              <form action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}" 
+                    method="post" 
+                    onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
+                <button type="submit" 
+                        class="btn btn-danger" 
+                        style="font-size:1rem; padding:8px 12px;">❌</button>
               </form>
             </td>
           </tr>
@@ -71,4 +86,3 @@
     <div class="alert alert-info">No hay clientes registrados todavía.</div>
   {% endif %}
 {% endblock %}
-

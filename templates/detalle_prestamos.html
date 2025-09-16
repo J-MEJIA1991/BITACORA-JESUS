@@ -9,6 +9,7 @@
       <tr>
         <th>Cliente</th>
         <th>Monto</th>
+        <th>Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -16,6 +17,14 @@
       <tr>
         <td>{{ prestamo.cliente.nombre }}</td>
         <td>{{ "%.2f"|format(prestamo.monto) }}</td>
+        <td>
+          <form action="{{ url_for('eliminar_prestamo', prestamo_id=prestamo.id) }}" 
+                method="POST" 
+                style="display:inline;"
+                onsubmit="return confirm('¿Seguro que deseas eliminar este préstamo?')">
+            <button type="submit" class="btn btn-danger btn-sm">❌ Eliminar</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -24,6 +33,7 @@
   <div class="alert alert-warning mt-3">No hubo préstamos en esta fecha.</div>
   {% endif %}
 
-  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">Volver</a>
+  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">⬅ Volver</a>
 </div>
 {% endblock %}
+
