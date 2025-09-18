@@ -13,7 +13,7 @@
   <p><strong>Hoy:</strong> {{ hoy.strftime("%d/%m/%Y") }}</p>
 
   {% if clientes %}
-    <table class="table table-bordered table-hover align-middle">
+    <table id="tabla-clientes" class="table table-bordered table-hover align-middle">
       <thead class="table-dark">
         <tr>
           <th>Orden</th>
@@ -31,10 +31,10 @@
           <tr class="{{ estado_class(c) }}">
             <!-- Orden -->
             <td style="width:110px;">
-              <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex">
+              <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
                 <input type="number" name="orden" value="{{ c.orden }}" 
-                       class="form-control" 
-                       style="font-size:1.2rem; padding:8px; text-align:center;" />
+                       class="form-control orden-input" 
+                       style="width:80px; font-size:1.5rem; padding:8px; text-align:center;" />
                 <button type="submit" 
                         class="btn btn-outline-primary ms-1" 
                         style="font-size:1rem; padding:8px 12px;">✔</button>
@@ -85,4 +85,44 @@
   {% else %}
     <div class="alert alert-info">No hay clientes registrados todavía.</div>
   {% endif %}
+
+  <!-- Script para actualizar orden automáticamente -->
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Inicializar DataTable
+    $('#tabla-clientes').DataTable({
+        columnDefs: [
+            { orderable: false, targets: 0 } // La primera columna no ordenable
+        ]
+    });
+
+    // Formularios de actualizar orden
+    document.querySelectorAll('.actualizar-orden-form').forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = form.querySelector('.orden-input');
+        const clienteId = form.action.split('/').pop();
+        const orden = input.value;
+
+        try {
+          const response = await fetch(`/actualizar_orden/${clienteId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `orden=${orden}`
+          });
+
+          if (response.ok) {
+            location.reload(); // Recarga la página para reflejar el nuevo orden
+          } else {
+            alert('Error al actualizar el orden.');
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error al actualizar el orden.');
+        }
+      });
+    });
+  });
+  </script>
+
 {% endblock %}

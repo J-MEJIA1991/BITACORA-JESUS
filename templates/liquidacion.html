@@ -44,11 +44,11 @@
     <!-- Resumen si hay rango -->
     {% if resumen_rango %}
     <div class="alert alert-info">
-        <strong>Resumen del {{ resumen_rango.desde }} al {{ resumen_rango.hasta }}</strong><br>
-        Total abonos: {{ "%.2f"|format(resumen_rango.total_abonos) }} |
-        Total préstamos: {{ "%.2f"|format(resumen_rango.total_prestamos) }} |
-        Caja final: {{ "%.2f"|format(resumen_rango.caja) }} |
-        Paquete final: {{ "%.2f"|format(resumen_rango.paquete) }}
+        <strong>Resumen del {{ resumen_rango.desde|default('---') }} al {{ resumen_rango.hasta|default('---') }}</strong><br>
+        Total abonos: {{ "%.2f"|format(resumen_rango.total_abonos|default(0)) }} |
+        Total préstamos: {{ "%.2f"|format(resumen_rango.total_prestamos|default(0)) }} |
+        Caja final: {{ "%.2f"|format(resumen_rango.caja|default(0)) }} |
+        Paquete final: {{ "%.2f"|format(resumen_rango.paquete|default(0)) }}
     </div>
     {% endif %}
 
@@ -64,27 +64,29 @@
             </tr>
         </thead>
         <tbody>
-            {% for liq in liquidaciones %}
-            <tr>
-                <td>{{ liq.fecha.strftime("%d/%m/%Y") }}</td>
-                <td>
-                    <a href="{{ url_for('detalle_abonos', fecha=liq.fecha.isoformat()) }}">
-                        {{ "%.2f"|format(liq.total_abonos) }}
-                    </a>
-                </td>
-                <td>
-                    <a href="{{ url_for('detalle_prestamos', fecha=liq.fecha.isoformat()) }}">
-                        {{ "%.2f"|format(liq.total_prestamos) }}
-                    </a>
-                </td>
-                <td>{{ "%.2f"|format(liq.caja) }}</td>
-                <td>{{ "%.2f"|format(liq.paquete) }}</td>
-            </tr>
+            {% if liquidaciones %}
+                {% for liq in liquidaciones %}
+                <tr>
+                    <td>{{ liq.fecha.strftime("%d/%m/%Y") if liq.fecha else "---" }}</td>
+                    <td>
+                        <a href="{{ url_for('detalle_abonos', fecha=liq.fecha.isoformat()) }}">
+                            {{ "%.2f"|format(liq.total_abonos|default(0)) }}
+                        </a>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('detalle_prestamos', fecha=liq.fecha.isoformat()) }}">
+                            {{ "%.2f"|format(liq.total_prestamos|default(0)) }}
+                        </a>
+                    </td>
+                    <td>{{ "%.2f"|format(liq.caja|default(0)) }}</td>
+                    <td>{{ "%.2f"|format(liq.paquete|default(0)) }}</td>
+                </tr>
+                {% endfor %}
             {% else %}
-            <tr>
-                <td colspan="5" class="text-center">No hay registros</td>
-            </tr>
-            {% endfor %}
+                <tr>
+                    <td colspan="5" class="text-center"⚠️ No hay registros</td>
+                </tr>
+            {% endif %}
         </tbody>
     </table>
 </div>

@@ -9,6 +9,8 @@
       <tr>
         <th>Cliente</th>
         <th>Monto</th>
+        ### >>> añadida columna fecha/hora
+        <th>Fecha / Hora</th>
         <th>Acciones</th>
       </tr>
     </thead>
@@ -17,6 +19,8 @@
       <tr>
         <td>{{ prestamo.cliente.nombre }}</td>
         <td>{{ "%.2f"|format(prestamo.monto) }}</td>
+        ### >>> aquí mostramos fecha + hora
+        <td>{{ prestamo.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
         <td>
           <form action="{{ url_for('eliminar_prestamo', prestamo_id=prestamo.id) }}" 
                 method="POST" 
