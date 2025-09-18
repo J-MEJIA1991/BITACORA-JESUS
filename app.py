@@ -12,10 +12,18 @@ from functools import wraps
 # ---------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
-# Si prefieres definir DATABASE_URL en el entorno, se usará; en caso contrario, se usa DB_DEFAULT.
+
+# URL de la base de datos
 DB_DEFAULT = "postgresql+psycopg2://jesus:0hYfIOyEEaiCax8ne3Wd7KspFgGJBdKy@dpg-d353siqli9vc739fqef0-a.oregon-postgres.render.com/jesus_zdd3"
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", DB_DEFAULT)
+uri = os.getenv("DATABASE_URL", DB_DEFAULT)
+
+# Ajuste necesario para Render: cambiar postgres:// a postgresql:// si es necesario
+if uri.startswith("postgres://"):
+    uri = uri.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 db = SQLAlchemy(app)
 
 # Credenciales (simples)
