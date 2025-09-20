@@ -14,7 +14,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
 
 # URL de la base de datos
-DB_DEFAULT = "postgresql+psycopg2://jesus:0hYfIOyEEaiCax8ne3Wd7KspFgGJBdKy@dpg-d353siqli9vc739fqef0-a.oregon-postgres.render.com/jesus_zdd3
+DB_DEFAULT = "postgresql+psycopg2://jesus:0hYfIOyEEaiCax8ne3Wd7KspFgGJBdKy@dpg-d353siqli9vc739fqef0-a.oregon-postgres.render.com/jesus_zdd3"
 uri = os.getenv("DATABASE_URL", DB_DEFAULT)
 
 # Ajuste necesario para Render: cambiar postgres:// a postgresql:// si es necesario
