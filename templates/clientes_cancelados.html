@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Clientes Cancelados{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Clientes Cancelados</h2>
+
+<!-- Botones principales -->
+<div class="mb-3">
+    <a class="btn btn-primary" href="{{ url_for('index') }}">🏠 Volver al Inicio</a>
+    <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
+</div>
+
+{% if clientes_cancelados %}
+<table id="tabla-cancelados" class="table table-bordered table-hover align-middle text-center">
+  <thead class="table-dark">
+    <tr>
+      <th>Código</th>
+      <th>Fecha</th>
+      <th>Nombre</th>
+      <th>Monto</th>
+      <th>Abonos</th>
+      <th>Saldo</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in clientes_cancelados %}
+    <tr class="cancelado">
+      <!-- Código -->
+      <td>{{ c.codigo }}</td>
+
+      <!-- Fecha -->
+      <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+
+      <!-- Nombre -->
+      <td>{{ c.nombre }}</td>
+
+      <!-- Monto -->
+      <td>{{ "%.2f"|format(c.monto) }}</td>
+
+      <!-- Abonos -->
+      <td>
+        {% if c.abonos %}
+          <ul class="list-unstyled mb-0">
+          {% for a in c.abonos %}
+            <li>{{ "%.2f"|format(a.monto) }} ({{ a.fecha.strftime("%d/%m/%Y") }})</li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          0.00
+        {% endif %}
+      </td>
+
+      <!-- Saldo -->
+      <td>0.00</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No hay clientes cancelados registrados.</div>
+{% endif %}
+
+<style>
+/* Clientes cancelados con fondo rojo suave */
+.cancelado {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+</style>
+
+{% endblock %}

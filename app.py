@@ -2,9 +2,9 @@
 import os
 import random
 from datetime import date, datetime, timedelta, time
-
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate  # <-- Aquí agregamos el import
 from functools import wraps
 
 # ---------------------------
@@ -14,7 +14,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
 
 # URL de la base de datos
-DB_DEFAULT = "postgresql+psycopg2://jesus:0hYfIOyEEaiCax8ne3Wd7KspFgGJBdKy@dpg-d353siqli9vc739fqef0-a.oregon-postgres.render.com/jesus_zdd3"
+DB_DEFAULT = "postgresql+psycopg2://mjesus40:iNZChYKoUcODzbvtCA0VKkj08luyaj5q@dpg-d3538fb3fgac73b4anpg-a.oregon-postgres.render.com/mjesus40"
 uri = os.getenv("DATABASE_URL", DB_DEFAULT)
 
 # Ajuste necesario para Render: cambiar postgres:// a postgresql:// si es necesario
@@ -24,11 +24,15 @@ if uri.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+# Inicializar la base de datos
 db = SQLAlchemy(app)
 
+# Configuración de Flask-Migrate
+migrate = Migrate(app, db)  # <-- Aquí configuramos Flask-Migrate
+
 # Credenciales (simples)
-VALID_USER = "J-Mejia"
-VALID_PASS = "honny"
+VALID_USER = "mjesus40"
+VALID_PASS = "198409"
 
 # ---------------------------
 # MODELOS
@@ -40,14 +44,16 @@ class Cliente(db.Model):
     nombre = db.Column(db.String(200), nullable=False)
     direccion = db.Column(db.String(300), nullable=True)
     monto = db.Column(db.Float, nullable=False, default=0.0)         # capital prestado
-    plazo = db.Column(db.Integer, nullable=False, default=30)        # días
-    interes = db.Column(db.Float, nullable=False, default=0.0)      # %
-    saldo = db.Column(db.Float, nullable=False, default=0.0)        # saldo pendiente
+    plazo = db.Column(db.Integer, nullable=False, default=30)         # días
+    interes = db.Column(db.Float, nullable=False, default=0.0)       # %
+    saldo = db.Column(db.Float, nullable=False, default=0.0)          # saldo pendiente
     fecha_creacion = db.Column(db.Date, default=date.today)
     ultimo_abono_fecha = db.Column(db.Date, nullable=True)
+    cancelado = db.Column(db.Boolean, default=False)                  # ✅ Nuevo campo
 
     abonos = db.relationship("Abono", backref="cliente", lazy=True, cascade="all, delete-orphan")
     prestamos = db.relationship("Prestamo", backref="cliente", lazy=True, cascade="all, delete-orphan")
+
 
 class MovimientoCaja(db.Model):
     __tablename__ = "movimiento_caja"
@@ -57,6 +63,7 @@ class MovimientoCaja(db.Model):
     descripcion = db.Column(db.String(255), nullable=True)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
+
 class Prestamo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey("cliente.id"), nullable=False)
@@ -65,6 +72,7 @@ class Prestamo(db.Model):
     movimiento_id = db.Column(db.Integer, db.ForeignKey("movimiento_caja.id"), nullable=True)
     movimiento = db.relationship("MovimientoCaja", foreign_keys=[movimiento_id], uselist=False)
 
+
 class Abono(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey("cliente.id"), nullable=False)
@@ -72,6 +80,7 @@ class Abono(db.Model):
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     movimiento_id = db.Column(db.Integer, db.ForeignKey("movimiento_caja.id"), nullable=True)
     movimiento = db.relationship("MovimientoCaja", foreign_keys=[movimiento_id], uselist=False)
+
 
 class Liquidacion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -136,74 +145,73 @@ def crear_liquidacion_para_fecha(fecha):
     db.session.commit()
     return liq
 
-def actualizar_liquidacion_por_movimiento(fecha):
-    """Recalcula los totales de la liquidación para la fecha dada."""
-    liq = crear_liquidacion_para_fecha(fecha)  # ✅ Siempre existe
-
-    # Recalcular con los movimientos reales
-    total_abonos = db.session.query(func.sum(Abono.monto)).filter_by(fecha=fecha).scalar() or 0.0
-    total_prestamos = db.session.query(func.sum(Prestamo.monto)).filter_by(fecha=fecha).scalar() or 0.0
-
-    # Caja = abonos - préstamos + entradas - salidas - gastos
-    entradas = db.session.query(func.sum(CajaEntrada.monto)).filter_by(fecha=fecha).scalar() or 0.0
-    salidas = db.session.query(func.sum(CajaSalida.monto)).filter_by(fecha=fecha).scalar() or 0.0
-    gastos = db.session.query(func.sum(CajaGasto.monto)).filter_by(fecha=fecha).scalar() or 0.0
-
-    caja = entradas - salidas - gastos
-    paquete = total_abonos - total_prestamos
-
-    # Actualizar valores
-    liq.total_abonos = total_abonos
-    liq.total_prestamos = total_prestamos
-    liq.caja = caja
-    liq.paquete = paquete
-
-    db.session.commit()
-    return liq
-
-def asegurar_liquidaciones_contiguas():
-    hoy = date.today()
-    ultima = Liquidacion.query.order_by(Liquidacion.fecha.desc()).first()
-    if not ultima:
-        crear_liquidacion_para_fecha(hoy)
-        return
-    dia = ultima.fecha + timedelta(days=1)
-    while dia <= hoy:
-        crear_liquidacion_para_fecha(dia)
-        dia += timedelta(days=1)
+from datetime import date, timedelta
+from sqlalchemy import func
 
 def actualizar_liquidacion_por_movimiento(fecha: date):
+    """Recalcula los totales de la liquidación para la fecha dada."""
+    # Normalizar fecha (por si viene con hora)
     fecha = fecha if isinstance(fecha, date) else fecha.date()
+
+    # Asegurar que exista la liquidación del día
     liq = Liquidacion.query.filter_by(fecha=fecha).first()
     if not liq:
         liq = crear_liquidacion_para_fecha(fecha)
 
+    # Rango de día (00:00 a 23:59)
     start, end = day_range(fecha)
-    tot_abonos = float(db.session.query(db.func.coalesce(db.func.sum(Abono.monto), 0)).filter(Abono.fecha >= start, Abono.fecha < end).scalar() or 0.0)
-    tot_prestamos = float(db.session.query(db.func.coalesce(db.func.sum(Prestamo.monto), 0)).filter(Prestamo.fecha >= start, Prestamo.fecha < end).scalar() or 0.0)
+
+    # Totales de movimientos
+    tot_abonos = float(
+        db.session.query(func.coalesce(func.sum(Abono.monto), 0))
+        .filter(Abono.fecha >= start, Abono.fecha < end).scalar() or 0.0
+    )
+    tot_prestamos = float(
+        db.session.query(func.coalesce(func.sum(Prestamo.monto), 0))
+        .filter(Prestamo.fecha >= start, Prestamo.fecha < end).scalar() or 0.0
+    )
     paquete_actual = paquete_total_actual()
 
-    anterior = Liquidacion.query.filter(Liquidacion.fecha < fecha).order_by(Liquidacion.fecha.desc()).first()
+    # Caja: se acumula desde el día anterior
+    anterior = Liquidacion.query.filter(Liquidacion.fecha < fecha)\
+        .order_by(Liquidacion.fecha.desc()).first()
     caja_anterior = float(anterior.caja) if anterior else 0.0
 
     mov_entrada, mov_salida, mov_gasto = movimientos_caja_totales_para_dia(fecha)
     caja = caja_anterior + mov_entrada - mov_salida - mov_gasto
 
+    # Actualizar liquidación
     liq.total_abonos = tot_abonos
     liq.total_prestamos = tot_prestamos
     liq.caja = caja
     liq.paquete = paquete_actual
+
     db.session.commit()
     return liq
+
+
+def asegurar_liquidaciones_contiguas():
+    """Crea liquidaciones para los días faltantes hasta hoy."""
+    hoy = date.today()
+    ultima = Liquidacion.query.order_by(Liquidacion.fecha.desc()).first()
+
+    if not ultima:
+        crear_liquidacion_para_fecha(hoy)
+        return
+
+    dia = ultima.fecha + timedelta(days=1)
+    while dia <= hoy:
+        crear_liquidacion_para_fecha(dia)
+        dia += timedelta(days=1)
 
 def cliente_estado_class(cliente: Cliente):
     try:
         venc = cliente.fecha_creacion + timedelta(days=cliente.plazo)
         hoy = date.today()
         if cliente.saldo <= 0:
-            return "table-success"
+            return "table-success"  # 👉 este sí, porque ya canceló todo
         if cliente.ultimo_abono_fecha == hoy:
-            return "table-info"
+            return ""  # 👈 antes ponía "table-success", ahora dejamos vacío
         if hoy > venc + timedelta(days=30):
             return "table-danger"
         if hoy > venc:
@@ -237,23 +245,24 @@ def logout():
 # RUTAS PRINCIPALES
 # ---------------------------
 @app.route("/")
-def raiz():
-    if "usuario" not in session:
-        return redirect(url_for("login"))
-    return redirect(url_for("index"))
-
-@app.route("/index")
 @login_required
 def index():
     asegurar_liquidaciones_contiguas()
     liq_hoy = crear_liquidacion_para_fecha(date.today())
-    clientes = Cliente.query.order_by(Cliente.orden).all()
-    return render_template("index.html", clientes=clientes, hoy=date.today(), estado_class=cliente_estado_class, liq_hoy=liq_hoy)
 
-@app.route("/inicio")
-@login_required
-def inicio():
-    return redirect(url_for("index"))
+    # Limpiar clientes con saldo 0 y que no estén cancelados
+    with app.app_context():
+        clientes_con_saldo_cero = Cliente.query.filter(Cliente.saldo == 0, Cliente.cancelado == False).all()
+        print("Clientes con saldo cero:", clientes_con_saldo_cero)  # Imprimir para ver qué se obtiene
+        for cliente in clientes_con_saldo_cero:
+            db.session.delete(cliente)  # Elimina el cliente de la base de datos
+        db.session.commit()
+
+    # Filtrar los clientes activos (no cancelados y con saldo mayor a 0)
+    clientes = Cliente.query.filter(Cliente.cancelado == False, Cliente.saldo > 0).order_by(Cliente.orden).all()
+    print("Clientes activos:", clientes)  # Ver qué clientes estamos obteniendo
+
+    return render_template("index.html", clientes=clientes, hoy=date.today(), estado_class=cliente_estado_class, liq_hoy=liq_hoy)
 
 @app.route("/dashboard")
 @login_required
@@ -281,14 +290,22 @@ def nuevo_cliente():
             flash("Monto, plazo o interés inválidos", "warning")
             return redirect(url_for("nuevo_cliente"))
 
+        # 👇 Aquí tomamos el orden desde el formulario
+        try:
+            orden = int(request.form.get("orden", 0))
+        except ValueError:
+            orden = 0
+
+        if orden <= 0:
+            last = Cliente.query.order_by(Cliente.orden.desc()).first()
+            orden = (last.orden + 1) if last else 1
+
         codigo = generar_codigo_numerico()
         saldo_total = monto + (monto * (interes / 100.0))
-        last = Cliente.query.order_by(Cliente.orden.desc()).first()
-        nuevo_orden = (last.orden + 1) if last else 1
 
         cliente = Cliente(
             codigo=codigo,
-            orden=nuevo_orden,
+            orden=orden,
             nombre=nombre,
             direccion=direccion,
             monto=monto,
@@ -311,9 +328,13 @@ def nuevo_cliente():
         db.session.commit()
         actualizar_liquidacion_por_movimiento(date.today())
         flash("Cliente creado y préstamo registrado", "success")
-        return redirect(url_for("index"))
 
+        # ✅ redirigir con ancla al cliente recién creado
+        return redirect(url_for("index") + f"#cliente-{cliente.id}")
+    
+    # 👇 importante: devolver la vista cuando es GET
     return render_template("nuevo_cliente.html")
+
 
 @app.route("/editar_cliente/<int:cliente_id>", methods=["GET", "POST"])
 @login_required
@@ -339,7 +360,9 @@ def editar_cliente(cliente_id):
         db.session.commit()
         flash("Cliente actualizado", "success")
         return redirect(url_for("index"))
+
     return render_template("editar_cliente.html", cliente=cliente)
+
 
 @app.route("/eliminar_cliente/<int:cliente_id>", methods=["POST"])
 @login_required
@@ -351,6 +374,22 @@ def eliminar_cliente(cliente_id):
     flash("Cliente eliminado", "success")
     return redirect(url_for("index"))
 
+from flask import jsonify, request, flash, redirect, url_for
+from datetime import datetime, date
+
+def respuesta_ajax(success, mensaje=None, nuevo_saldo=None, cancelado=None):
+    """Función reutilizable para manejar las respuestas AJAX."""
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        response = {"success": success}
+        if mensaje:
+            response["mensaje"] = mensaje
+        if nuevo_saldo:
+            response["nuevo_saldo"] = nuevo_saldo
+        if cancelado is not None:
+            response["cancelado"] = cancelado
+        return jsonify(response), 400 if not success else 200
+    return None
+
 # ---------------------------
 # ABONOS
 # ---------------------------
@@ -358,36 +397,51 @@ def eliminar_cliente(cliente_id):
 @login_required
 def abonar(cliente_id):
     cliente = Cliente.query.get_or_404(cliente_id)
+
+    # Evitar abonar a clientes cancelados
+    if cliente.cancelado:
+        return respuesta_ajax(False, "Cliente cancelado")
+
+    # Obtener monto del formulario
     try:
         monto_abono = float(request.form.get("monto_abono", 0))
     except ValueError:
-        flash("Abono inválido", "warning")
-        return redirect(url_for("index"))
+        return respuesta_ajax(False, "Abono inválido")
 
     if monto_abono <= 0:
-        flash("El abono debe ser mayor a 0", "warning")
-        return redirect(url_for("index"))
-    if monto_abono > cliente.saldo:
-        # Si no quieres bloquearlo quita esta validación; la dejo como aviso.
-        flash("El abono no puede ser mayor al saldo", "danger")
-        return redirect(url_for("index"))
+        return respuesta_ajax(False, "El abono debe ser mayor a 0")
 
+    if monto_abono > cliente.saldo:
+        return respuesta_ajax(False, "El abono no puede ser mayor al saldo")
+
+    # Aplicar abono
     cliente.saldo -= monto_abono
     cliente.ultimo_abono_fecha = date.today()
 
     ab = Abono(cliente_id=cliente.id, monto=monto_abono, fecha=datetime.utcnow())
     db.session.add(ab)
 
-    # registrar movimiento en caja: entrada (asociado al abono)
-    mov = MovimientoCaja(tipo="entrada", monto=monto_abono, descripcion=f"Abono {cliente.nombre}", fecha=datetime.utcnow())
+    mov = MovimientoCaja(
+        tipo="entrada",
+        monto=monto_abono,
+        descripcion=f"Abono {cliente.nombre}",
+        fecha=datetime.utcnow()
+    )
     db.session.add(mov)
     db.session.flush()
     ab.movimiento_id = mov.id
 
+    # Cancelar cliente automáticamente si saldo quedó en 0
+    if cliente.saldo <= 0:
+        cliente.saldo = 0.0
+        cliente.cancelado = True
+
     db.session.commit()
     actualizar_liquidacion_por_movimiento(date.today())
-    flash("Abono registrado correctamente", "success")
-    return redirect(url_for("index"))
+
+    # Respuesta AJAX
+    return respuesta_ajax(True, nuevo_saldo=f"{cliente.saldo:.2f}", cancelado=cliente.cancelado)
+
 
 @app.route("/eliminar_abono/<int:abono_id>", methods=["POST"])
 @login_required
@@ -396,19 +450,21 @@ def eliminar_abono(abono_id):
     cliente = abono.cliente
     fecha_dt = abono.fecha.date() if isinstance(abono.fecha, datetime) else abono.fecha
 
-    # revertir saldo
+    # Revertir saldo
     if cliente:
         cliente.saldo += abono.monto
-        if cliente.ultimo_abono_fecha == (abono.fecha.date() if isinstance(abono.fecha, datetime) else abono.fecha):
+        if cliente.saldo > 0:
+            cliente.cancelado = False  # Reactivar cliente si estaba cancelado
+        if cliente.ultimo_abono_fecha == fecha_dt:
             otros = Abono.query.filter(
                 Abono.cliente_id == cliente.id,
-                db.func.date(Abono.fecha) == (abono.fecha.date() if isinstance(abono.fecha, datetime) else abono.fecha),
+                db.func.date(Abono.fecha) == fecha_dt,
                 Abono.id != abono.id
             ).count()
             if otros == 0:
                 cliente.ultimo_abono_fecha = None
 
-        # eliminar movimiento asociado (si existe)
+    # Eliminar movimiento asociado
     if abono.movimiento_id:
         mov = MovimientoCaja.query.get(abono.movimiento_id)
         if mov:
@@ -418,8 +474,23 @@ def eliminar_abono(abono_id):
     db.session.commit()
     actualizar_liquidacion_por_movimiento(fecha_dt)
     flash("Abono eliminado, saldo repuesto y caja ajustada", "success")
-    flash("Abono eliminado, saldo repuesto y caja ajustada", "success")
     return redirect(url_for("liquidacion"))
+
+# ---------------------------
+# NUEVA RUTA: DETALLES ABONOS
+# ---------------------------
+
+from sqlalchemy import cast, Date
+
+@app.route("/detalle_abonos/<fecha>")
+@login_required
+def detalle_abonos(fecha):
+    fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+    
+    # Filtramos solo por la fecha sin tomar en cuenta la hora
+    abonos = Abono.query.filter(cast(Abono.fecha, Date) == fecha_obj).all()
+    
+    return render_template("detalle_abonos.html", abonos=abonos, fecha=fecha_obj)
 
 # ---------------------------
 # PRÉSTAMOS
@@ -429,12 +500,14 @@ def eliminar_abono(abono_id):
 def eliminar_prestamo(prestamo_id):
     prestamo = Prestamo.query.get_or_404(prestamo_id)
     cliente = prestamo.cliente
-    fecha_dt = prestamo.fecha  # ✅ aquí guardas fecha + hora completas
+    fecha_dt = prestamo.fecha  # fecha + hora completas
 
     if cliente:
         cliente.saldo -= prestamo.monto
         if cliente.saldo < 0:
-            cliente.saldo = 0
+            cliente.saldo = 0.0
+        # Ajustar cancelación según saldo
+        cliente.cancelado = cliente.saldo <= 0
 
     # eliminar movimiento asociado si existe
     if prestamo.movimiento_id:
@@ -448,50 +521,17 @@ def eliminar_prestamo(prestamo_id):
 
     flash("Préstamo eliminado correctamente", "success")
     return redirect(url_for("liquidacion"))
-# ---------------------------
-# DETALLES ABONOS (con fecha/hora)
-# ---------------------------
-@app.route("/detalle_abonos/<fecha>")
-@login_required
-def detalle_abonos(fecha):
-    try:
-        f = datetime.strptime(fecha, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Fecha inválida", "warning")
-        return redirect(url_for("liquidacion"))
-    start, end = day_range(f)
-    abonos = Abono.query.filter(Abono.fecha >= start, Abono.fecha < end).all()
-    tot_entrada, tot_salida, tot_gasto = movimientos_caja_totales_para_dia(f)
-    return render_template("detalle_abonos.html", abonos=abonos, fecha=f, tot_entrada=tot_entrada, tot_salida=tot_salida, tot_gasto=tot_gasto)
 
-# ---------------------------
-# DETALLES PRÉSTAMOS (con fecha/hora)
-# ---------------------------
 @app.route("/detalle_prestamos/<fecha>")
 @login_required
 def detalle_prestamos(fecha):
-    try:
-        f = datetime.strptime(fecha, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Fecha inválida", "warning")
-        return redirect(url_for("liquidacion"))
-
-    start, end = day_range(f)
-    prestamos = Prestamo.query.filter(Prestamo.fecha >= start, Prestamo.fecha < end).all()
-    tot_entrada, tot_salida, tot_gasto = movimientos_caja_totales_para_dia(f)
-
-    return render_template(
-        "detalle_prestamos.html",
-        prestamos=prestamos,
-        fecha=f,
-        tot_entrada=tot_entrada,
-        tot_salida=tot_salida,
-        tot_gasto=tot_gasto
-    )
+    # Lógica de la ruta
+    pass
 
 # ---------------------------
-# MOVIMIENTOS DE CAJA (manuales)
+# CAJA
 # ---------------------------
+# Rutas para 'caja_entrada' y 'caja_salida'
 @app.route("/caja/entrada", methods=["POST"])
 @login_required
 def caja_entrada():
@@ -500,9 +540,11 @@ def caja_entrada():
     except ValueError:
         flash("Monto inválido", "warning")
         return redirect(url_for("liquidacion"))
+
     if monto <= 0:
         flash("Monto debe ser mayor a 0", "warning")
         return redirect(url_for("liquidacion"))
+
     descripcion = request.form.get("descripcion", "Entrada manual")
     mov = MovimientoCaja(tipo="entrada", monto=monto, descripcion=descripcion, fecha=datetime.utcnow())
     db.session.add(mov)
@@ -519,9 +561,11 @@ def caja_salida():
     except ValueError:
         flash("Monto inválido", "warning")
         return redirect(url_for("liquidacion"))
+
     if monto <= 0:
         flash("Monto debe ser mayor a 0", "warning")
         return redirect(url_for("liquidacion"))
+
     descripcion = request.form.get("descripcion", "Salida manual")
     mov = MovimientoCaja(tipo="salida", monto=monto, descripcion=descripcion, fecha=datetime.utcnow())
     db.session.add(mov)
@@ -538,16 +582,19 @@ def caja_gasto():
     except ValueError:
         flash("Monto inválido", "warning")
         return redirect(url_for("liquidacion"))
+
     if monto <= 0:
         flash("Monto debe ser mayor a 0", "warning")
         return redirect(url_for("liquidacion"))
-    descripcion = request.form.get("descripcion", "Gasto")
+
+    descripcion = request.form.get("descripcion", "Gasto manual")
     mov = MovimientoCaja(tipo="gasto", monto=monto, descripcion=descripcion, fecha=datetime.utcnow())
     db.session.add(mov)
     db.session.commit()
     actualizar_liquidacion_por_movimiento(date.today())
     flash("Gasto registrado en caja", "success")
     return redirect(url_for("liquidacion"))
+
 
 # ---------------------------
 # REORDENAR CLIENTES
@@ -577,7 +624,6 @@ def actualizar_orden(cliente_id):
     db.session.commit()
     flash("Orden actualizado correctamente", "success")
     return redirect(url_for("index"))
-
 # ---------------------------
 # LIQUIDACIÓN / RESUMEN
 # ---------------------------
@@ -631,3 +677,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
+

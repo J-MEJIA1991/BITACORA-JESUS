@@ -3,126 +3,200 @@
 {% block title %}Inicio{% endblock %}
 
 {% block content %}
-  <h2 class="mb-4">Listado de Clientes</h2>
+<h2 class="mb-4">Listado de Clientes</h2>
 
-  <div class="mb-3">
+<!-- Botones principales -->
+<div class="mb-3">
     <a class="btn btn-primary" href="{{ url_for('nuevo_cliente') }}">➕ Nuevo Cliente</a>
     <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
-  </div>
+</div>
 
-  <p><strong>Hoy:</strong> {{ hoy.strftime("%d/%m/%Y") }}</p>
+<!-- Totales de hoy -->
+<p><strong>Hoy:</strong> {{ hoy.strftime("%d/%m/%Y") }}</p>
+{% if liq_hoy %}
+<div class="mb-3">
+    <strong>Abonos hoy:</strong> {{ "%.2f"|format(liq_hoy.total_abonos) }} |
+    <strong>Préstamos hoy:</strong> {{ "%.2f"|format(liq_hoy.total_prestamos) }} |
+    <strong>Caja:</strong> {{ "%.2f"|format(liq_hoy.caja) }} |
+    <strong>Paquete:</strong> {{ "%.2f"|format(liq_hoy.paquete) }}
+</div>
+<canvas id="grafico-liquidacion" width="400" height="150"></canvas>
+{% endif %}
 
-  {% if clientes %}
-    <table id="tabla-clientes" class="table table-bordered table-hover align-middle">
-      <thead class="table-dark">
-        <tr>
-          <th>Orden</th>
-          <th>Código</th>
-          <th>Fecha</th>
-          <th>Nombre</th>
-          <th>Monto</th>
-          <th>Abono</th>
-          <th>Saldo</th>
-          <th>Eliminar</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in clientes %}
-          <tr class="{{ estado_class(c) }}">
-            <!-- Orden -->
-            <td style="width:110px;">
-              <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
-                <input type="number" name="orden" value="{{ c.orden }}" 
-                       class="form-control orden-input" 
-                       style="width:80px; font-size:1.5rem; padding:8px; text-align:center;" />
-                <button type="submit" 
-                        class="btn btn-outline-primary ms-1" 
-                        style="font-size:1rem; padding:8px 12px;">✔</button>
-              </form>
-            </td>
+{% if clientes %}
+<table id="tabla-clientes" class="table table-bordered table-hover align-middle text-center">
+  <thead class="table-dark">
+    <tr>
+      <th>Orden</th>
+      <th>Código</th>
+      <th>Fecha</th>
+      <th>Nombre</th>
+      <th>Monto</th>
+      <th>Abono</th>
+      <th>Saldo</th>
+      <th>Eliminar</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in clientes %}
+    <tr id="cliente-{{ c.id }}" {% if c.cancelado %}class="cancelado"{% endif %}>
+      <!-- Orden -->
+      <td style="width:100px;">
+        <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
+          <input type="number" name="orden" value="{{ c.orden }}"
+                 class="form-control text-center"
+                 style="width:70px;" {% if c.cancelado %}disabled{% endif %}/>
+          <button type="submit" class="btn btn-outline-primary ms-1 btn-sm" {% if c.cancelado %}disabled{% endif %}>✔</button>
+        </form>
+      </td>
 
-            <!-- Código -->
-            <td>{{ c.codigo }}</td>
+      <!-- Código -->
+      <td>{{ c.codigo }}</td>
 
-            <!-- Fecha -->
-            <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+      <!-- Fecha -->
+      <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
 
-            <!-- Nombre -->
-            <td>{{ c.nombre }}</td>
+      <!-- Nombre -->
+      <td>{{ c.nombre }}</td>
 
-            <!-- Monto -->
-            <td>{{ "%.2f"|format(c.monto) }}</td>
+      <!-- Monto -->
+      <td>{{ "%.2f"|format(c.monto) }}</td>
 
-            <!-- Abono -->
-            <td style="width:140px;">
-              <form action="{{ url_for('abonar', cliente_id=c.id) }}" method="post" class="d-flex">
-                <input type="number" step="0.01" name="monto_abono" value="0"
-                       class="form-control" 
-                       style="font-size:1.2rem; padding:8px; text-align:right;" />
-                <button type="submit" 
-                        class="btn btn-success ms-1" 
-                        style="font-size:1rem; padding:8px 12px;">💵</button>
-              </form>
-            </td>
+      <!-- Abono -->
+      <td class="abono-td">
+        {% if not c.cancelado %}
+        <form action="{{ url_for('abonar', cliente_id=c.id) }}" method="post" class="d-flex">
+          <input type="number" step="0.01" min="0.01" name="monto_abono" placeholder="0"
+                 class="form-control abono-input text-end" />
+          <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
+        </form>
+        {% else %}
+        0.00
+        {% endif %}
+      </td>
 
-            <!-- Saldo -->
-            <td>{{ "%.2f"|format(c.saldo) }}</td>
+      <!-- Saldo -->
+      <td>
+        {% if c.cancelado %}
+          0.00
+        {% else %}
+          {{ "%.2f"|format(c.saldo) }}
+        {% endif %}
+      </td>
 
-            <!-- Eliminar cliente -->
-            <td>
-              <form action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}" 
-                    method="post" 
-                    onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
-                <button type="submit" 
-                        class="btn btn-danger" 
-                        style="font-size:1rem; padding:8px 12px;">❌</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <div class="alert alert-info">No hay clientes registrados todavía.</div>
-  {% endif %}
+      <!-- Eliminar cliente -->
+      <td>
+        <form action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}" method="post"
+              onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
+          <button type="submit" class="btn btn-danger btn-sm">❌</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No hay clientes registrados todavía.</div>
+{% endif %}
 
-  <!-- Script para actualizar orden automáticamente -->
-  <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    // Inicializar DataTable
-    $('#tabla-clientes').DataTable({
-        columnDefs: [
-            { orderable: false, targets: 0 } // La primera columna no ordenable
-        ]
+<!-- Script para pintar abonos y avanzar al siguiente -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('.abono-td form').forEach((form, idx, forms) => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = form.querySelector('.abono-input');
+            const td = form.closest('.abono-td');
+            const clienteId = form.action.split('/').pop();
+            const monto = parseFloat(input.value);
+
+            if (isNaN(monto) || monto <= 0) {
+                alert("Monto inválido");
+                return;
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: `monto_abono=${monto}`
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    td.classList.add("abono-realizado");
+                    input.classList.add("abono-realizado");
+
+                    const saldoTd = td.nextElementSibling;
+                    if (saldoTd) saldoTd.textContent = data.nuevo_saldo;
+
+                    input.value = '';
+
+                    const hoy = "{{ hoy.strftime('%Y-%m-%d') }}";
+                    let abonados = JSON.parse(localStorage.getItem("abonados_" + hoy) || "[]");
+                    if (!abonados.includes(clienteId)) {
+                        abonados.push(clienteId);
+                        localStorage.setItem("abonados_" + hoy, JSON.stringify(abonados));
+                    }
+
+                    const nextForm = forms[idx + 1];
+                    if (nextForm) {
+                        const nextInput = nextForm.querySelector('.abono-input');
+                        if (nextInput) nextInput.focus();
+                    }
+                } else {
+                    alert(data.mensaje);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error al registrar abono.");
+            }
+        });
     });
 
-    // Formularios de actualizar orden
-    document.querySelectorAll('.actualizar-orden-form').forEach(form => {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = form.querySelector('.orden-input');
-        const clienteId = form.action.split('/').pop();
-        const orden = input.value;
-
-        try {
-          const response = await fetch(`/actualizar_orden/${clienteId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `orden=${orden}`
-          });
-
-          if (response.ok) {
-            location.reload(); // Recarga la página para reflejar el nuevo orden
-          } else {
-            alert('Error al actualizar el orden.');
-          }
-        } catch (err) {
-          console.error(err);
-          alert('Error al actualizar el orden.');
+    const hoy = "{{ hoy.strftime('%Y-%m-%d') }}";
+    Object.keys(localStorage).forEach(k => {
+        if (k.startsWith("abonados_") && k !== "abonados_" + hoy) {
+            localStorage.removeItem(k);
         }
-      });
     });
-  });
-  </script>
+
+    const abonados = JSON.parse(localStorage.getItem("abonados_" + hoy) || "[]");
+    abonados.forEach(id => {
+        const td = document.querySelector(`#cliente-${id} .abono-td`);
+        if (td) {
+            td.classList.add("abono-realizado");
+            const input = td.querySelector('.abono-input');
+            if (input) input.classList.add("abono-realizado");
+        }
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const nuevoId = params.get("nuevo_id");
+    if (nuevoId) {
+        const fila = document.getElementById("cliente-" + nuevoId);
+        if (fila) {
+            fila.scrollIntoView({ behavior: "smooth", block: "center" });
+            fila.style.transition = "background-color 1s ease";
+            fila.style.backgroundColor = "#fff3cd";
+            setTimeout(() => fila.style.backgroundColor = "", 3000);
+        }
+    }
+});
+</script>
+
+<style>
+/* Clientes cancelados con fondo rojo suave */
+.cancelado {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+</style>
 
 {% endblock %}
+
+
