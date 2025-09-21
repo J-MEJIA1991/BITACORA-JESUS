@@ -521,12 +521,16 @@ def eliminar_prestamo(prestamo_id):
 
     flash("Préstamo eliminado correctamente", "success")
     return redirect(url_for("liquidacion"))
-
 @app.route("/detalle_prestamos/<fecha>")
 @login_required
 def detalle_prestamos(fecha):
-    # Lógica de la ruta
-    pass
+    # Convertimos la fecha del string a objeto date
+    fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+    
+    # Filtramos los préstamos por la fecha (ignorando la hora)
+    prestamos = Prestamo.query.filter(cast(Prestamo.fecha, Date) == fecha_obj).all()
+    
+    return render_template("detalle_prestamos.html", prestamos=prestamos, fecha=fecha_obj)
 
 # ---------------------------
 # CAJA
