@@ -71,8 +71,8 @@
                  data-cliente-id="{{ c.id }}" style="font-size: 1.5em; padding: 0.4em;"/>
           <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
         </form>
-        <!-- Historial de abonos -->
-        <div class="historial-abonos mt-1" id="historial-{{ c.id }}" style="display:none; max-height:150px; overflow:auto; font-size:0.9em;"></div>
+        <!-- Historial oculto (ya no se usará en tabla, pero lo dejamos por compatibilidad) -->
+        <div class="historial-abonos mt-1" id="historial-{{ c.id }}" style="display:none;"></div>
         {% else %}
         0.00
         {% endif %}
@@ -101,6 +101,34 @@
 {% else %}
 <div class="alert alert-info">No hay clientes registrados todavía.</div>
 {% endif %}
+
+<!-- ================== MODAL HISTORIAL ================== -->
+<div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalHistorialLabel">Historial de Abonos</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm table-bordered text-center align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Nombre</th>
+              <th>Monto</th>
+              <th>Eliminar</th>
+            </tr>
+          </thead>
+          <tbody id="tablaHistorialBody">
+            <tr><td colspan="5"><em>Cargando...</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Script para abonos, scroll y historial -->
 <script>
@@ -162,32 +190,58 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Historial de abonos al click/focus
+    // NUEVO: Long press + doble clic para abrir historial en modal
     document.querySelectorAll('.abono-input').forEach(input => {
-        input.addEventListener('focus', async () => {
-            const clienteId = input.dataset.clienteId;
-            const historialDiv = document.getElementById("historial-" + clienteId);
+        let pressTimer;
+        const clienteId = input.dataset.clienteId;
 
-            if(historialDiv.style.display === "none" || historialDiv.innerHTML === "") {
-                try {
-                    const response = await fetch(`/historial_abonos/${clienteId}`);
-                    const data = await response.json();
-                    if(data.abonos.length > 0) {
-                        historialDiv.innerHTML = data.abonos.map(a => 
-                            `${a.fecha} - ${a.monto.toFixed(2)}`
-                        ).join("<br>");
-                    } else {
-                        historialDiv.innerHTML = "<em>No hay abonos registrados</em>";
-                    }
-                    historialDiv.style.display = "block";
-                } catch(err) {
-                    console.error(err);
-                    historialDiv.innerHTML = "<em>Error cargando historial</em>";
-                    historialDiv.style.display = "block";
-                }
-            }
+        // Long press
+        input.addEventListener('mousedown', () => {
+            pressTimer = setTimeout(() => {
+                cargarHistorial(clienteId);
+            }, 600);
+        });
+        input.addEventListener('mouseup', () => clearTimeout(pressTimer));
+        input.addEventListener('mouseleave', () => clearTimeout(pressTimer));
+
+        // Doble clic
+        input.addEventListener('dblclick', () => {
+            cargarHistorial(clienteId);
         });
     });
+
+    async function cargarHistorial(clienteId) {
+        try {
+            const response = await fetch(`/historial_abonos/${clienteId}`);
+            const data = await response.json();
+            const tbody = document.getElementById("tablaHistorialBody");
+
+            if (data.abonos.length > 0) {
+                tbody.innerHTML = data.abonos.map(a => `
+                    <tr>
+                      <td>${a.fecha}</td>
+                      <td>${a.hora || ""}</td>
+                      <td>${a.nombre || ""}</td>
+                      <td>${a.monto.toFixed(2)}</td>
+                      <td>
+                        <form method="post" action="/eliminar_abono/${a.id}" 
+                              onsubmit="return confirm('¿Eliminar este abono?');">
+                          <button type="submit" class="btn btn-danger btn-sm">❌</button>
+                        </form>
+                      </td>
+                    </tr>
+                `).join("");
+            } else {
+                tbody.innerHTML = `<tr><td colspan="5"><em>No hay abonos registrados</em></td></tr>`;
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('modalHistorial'));
+            modal.show();
+        } catch (err) {
+            console.error(err);
+            alert("Error cargando historial.");
+        }
+    }
 
     // Limpiar localStorage antiguo
     const hoy = "{{ hoy.strftime('%Y-%m-%d') }}";
