@@ -67,9 +67,12 @@
         {% if not c.cancelado %}
         <form action="{{ url_for('abonar', cliente_id=c.id) }}" method="post" class="d-flex">
           <input type="number" step="0.01" min="0.01" name="monto_abono" placeholder="0"
-                 class="form-control abono-input text-end" />
+                 class="form-control abono-input text-end" 
+                 data-cliente-id="{{ c.id }}" style="font-size: 1.5em; padding: 0.4em;"/>
           <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
         </form>
+        <!-- Historial de abonos -->
+        <div class="historial-abonos mt-1" id="historial-{{ c.id }}" style="display:none; max-height:150px; overflow:auto; font-size:0.9em;"></div>
         {% else %}
         0.00
         {% endif %}
@@ -99,10 +102,11 @@
 <div class="alert alert-info">No hay clientes registrados todavía.</div>
 {% endif %}
 
-<!-- Script para pintar abonos y avanzar al siguiente -->
+<!-- Script para abonos, scroll y historial -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll('.abono-td form').forEach((form, idx, forms) => {
+    const abonoForms = document.querySelectorAll('.abono-td form');
+    abonoForms.forEach((form, idx, forms) => {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const input = form.querySelector('.abono-input');
@@ -158,6 +162,34 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    // Historial de abonos al click/focus
+    document.querySelectorAll('.abono-input').forEach(input => {
+        input.addEventListener('focus', async () => {
+            const clienteId = input.dataset.clienteId;
+            const historialDiv = document.getElementById("historial-" + clienteId);
+
+            if(historialDiv.style.display === "none" || historialDiv.innerHTML === "") {
+                try {
+                    const response = await fetch(`/historial_abonos/${clienteId}`);
+                    const data = await response.json();
+                    if(data.abonos.length > 0) {
+                        historialDiv.innerHTML = data.abonos.map(a => 
+                            `${a.fecha} - ${a.monto.toFixed(2)}`
+                        ).join("<br>");
+                    } else {
+                        historialDiv.innerHTML = "<em>No hay abonos registrados</em>";
+                    }
+                    historialDiv.style.display = "block";
+                } catch(err) {
+                    console.error(err);
+                    historialDiv.innerHTML = "<em>Error cargando historial</em>";
+                    historialDiv.style.display = "block";
+                }
+            }
+        });
+    });
+
+    // Limpiar localStorage antiguo
     const hoy = "{{ hoy.strftime('%Y-%m-%d') }}";
     Object.keys(localStorage).forEach(k => {
         if (k.startsWith("abonados_") && k !== "abonados_" + hoy) {
@@ -175,6 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // Scroll al nuevo cliente
     const params = new URLSearchParams(window.location.search);
     const nuevoId = params.get("nuevo_id");
     if (nuevoId) {
@@ -195,8 +228,15 @@ document.addEventListener("DOMContentLoaded", () => {
     background-color: #f8d7da;
     color: #721c24;
 }
+
+/* Input de abonos más grande */
+.abono-input {
+    font-size: 1.5em;
+    padding: 0.4em;
+}
 </style>
 
 {% endblock %}
+
 
 
