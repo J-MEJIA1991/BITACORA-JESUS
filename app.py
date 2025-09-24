@@ -31,8 +31,8 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # <-- Aquí configuramos Flask-Migrate
 
 # Credenciales (simples)
-VALID_USER = "mjesus40"
-VALID_PASS = "198409"
+VALID_USER = "j-mejia"
+VALID_PASS = "honny"
 
 # ---------------------------
 # MODELOS
