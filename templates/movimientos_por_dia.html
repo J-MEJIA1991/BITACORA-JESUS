@@ -1,0 +1,73 @@
+
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="card shadow-sm">
+    <div class="card-body text-center">
+      <h4 class="card-title mb-3">{{ titulo }}</h4>
+      <h6 class="text-muted">📅 Fecha: {{ fecha.strftime("%d/%m/%Y") }}</h6>
+    </div>
+  </div>
+
+  <!-- Tabla de movimientos -->
+  <div class="table-responsive mt-4">
+    <table class="table table-bordered table-hover text-center align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Fecha y Hora</th>
+          {% if tipo == 'abono' %}
+            <th>Cliente</th>
+          {% else %}
+            <th>Descripción</th>
+          {% endif %}
+          <th>Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if movimientos %}
+          {% for m in movimientos %}
+            <tr>
+              {% if tipo == 'abono' %}
+                <td>{{ m[0].strftime("%d/%m/%Y %H:%M:%S") }}</td>
+                <td>{{ m[1] }}</td>
+                <td>${{ "%.2f"|format(m[2]) }}</td>
+              {% else %}
+                <td>{{ m.fecha.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+                <td>{{ m.descripcion or "—" }}</td>
+                <td>${{ "%.2f"|format(m.monto) }}</td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" class="text-muted">No hay movimientos registrados.</td></tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr class="fw-bold">
+          <td colspan="2" class="text-end">Total {{ titulo }}</td>
+          <td>${{ "%.2f"|format(total) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Botón volver -->
+  <div class="text-center mt-4">
+    <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary">⬅️ Volver a Liquidación</a>
+  </div>
+</div>
+
+<style>
+  .table td, .table th {
+    vertical-align: middle;
+  }
+  .card {
+    border-radius: 12px;
+  }
+  .fw-bold td {
+    font-weight: 600;
+  }
+</style>
+{% endblock %}

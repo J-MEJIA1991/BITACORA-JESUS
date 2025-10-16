@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Salidas del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h3>💸 Salidas del {{ fecha.strftime("%d/%m/%Y") }}</h3>
+  {% if salidas %}
+  <table class="table table-striped text-center">
+    <thead class="table-dark">
+      <tr>
+        <th>Monto</th>
+        <th>Descripción</th>
+        <th>Fecha y Hora</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in salidas %}
+      <tr>
+        <td>${{ "%.2f"|format(s.monto) }}</td>
+        <td>{{ s.descripcion or 'Sin descripción' }}</td>
+        <td>{{ s.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="alert alert-warning text-center mt-3">
+    <strong>Total Salidas:</strong> ${{ "%.2f"|format(total_salidas) }}
+  </div>
+  {% else %}
+  <div class="alert alert-info text-center mt-3">No se registraron salidas en esta fecha.</div>
+  {% endif %}
+  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">⬅ Volver a Liquidación</a>
+</div>
+{% endblock %}

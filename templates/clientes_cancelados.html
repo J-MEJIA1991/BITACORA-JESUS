@@ -1,47 +1,51 @@
+
 {% extends "base.html" %}
+{% block title %}Clientes Cancelados{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2>🚫 Clientes Cancelados</h2>
+  <h2 class="mb-4">🚫 Clientes Cancelados</h2>
 
-    {% if clientes_cancelados %}
-    <table class="table table-bordered table-hover mt-3">
-        <thead class="table-dark">
-            <tr>
-                <th>Código</th>
-                <th>Nombre</th>
-                <th>Dirección</th>
-                <th>Monto</th>
-                <th>Plazo</th>
-                <th>Interés</th>
-                <th>Saldo</th>
-                <th>Fecha Creación</th>
-                <th>Último Abono</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for cliente in clientes_cancelados %}
-            <tr>
-                <td>{{ cliente.codigo }}</td>
-                <td>{{ cliente.nombre }}</td>
-                <td>{{ cliente.direccion }}</td>
-                <td>{{ "%.2f"|format(cliente.monto) }}</td>
-                <td>{{ cliente.plazo }}</td>
-                <td>{{ "%.2f"|format(cliente.interes) }}%</td>
-                <td>{{ "%.2f"|format(cliente.saldo) }}</td>
-                <td>{{ cliente.fecha_creacion.strftime("%d/%m/%Y") if cliente.fecha_creacion else "---" }}</td>
-                <td>{{ cliente.ultimo_abono_fecha.strftime("%d/%m/%Y") if cliente.ultimo_abono_fecha else "---" }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="alert alert-info mt-3">
-        ⚠️ No hay clientes cancelados en este momento.
-    </div>
-    {% endif %}
+  <div class="mb-3">
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">⬅️ Volver al listado</a>
+  </div>
 
-    <a href="{{ url_for('liquidacion') }}" class="btn btn-primary mt-3">⬅️ Volver a Liquidación</a>
+  {% if clientes %}
+  <table class="table table-bordered table-hover align-middle text-center">
+    <thead class="table-dark">
+      <tr>
+        <th>Código</th>
+        <th>Nombre</th>
+        <th>Dirección</th>
+        <th>Teléfono</th>
+        <th>Fecha Creación</th>
+        <th>Saldo Total</th>
+        <th>Reactivar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr>
+        <td>{{ c.codigo }}</td>
+        <td>{{ c.nombre }}</td>
+        <td>{{ c.direccion or "—" }}</td>
+        <td>{{ c.telefono or "—" }}</td>
+        <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+        <td>${{ "%.2f"|format(c.saldo_total()) }}</td>
+        <td>
+          <form action="{{ url_for('reactivar_cliente', cliente_id=c.id) }}" method="post"
+                onsubmit="return confirm('¿Deseas reactivar este cliente?');">
+            <button type="submit" class="btn btn-success btn-sm">🔄 Reactivar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-info text-center">
+    No hay clientes cancelados actualmente.
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
-

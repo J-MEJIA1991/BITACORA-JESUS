@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Detalle de {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">👤 {{ cliente.nombre }}</h2>
+
+  <div class="mb-3">
+    <p><strong>Código:</strong> {{ cliente.codigo }}</p>
+    <p><strong>Dirección:</strong> {{ cliente.direccion or "No registrada" }}</p>
+    <p><strong>Teléfono:</strong> {{ cliente.telefono or "No registrado" }}</p>
+    <p><strong>Fecha de creación:</strong> {{ cliente.fecha_creacion.strftime("%d/%m/%Y") }}</p>
+    <p><strong>Estado:</strong>
+      {% if cliente.cancelado %}
+        <span class="badge bg-danger">Cancelado</span>
+      {% else %}
+        <span class="badge bg-success">Activo</span>
+      {% endif %}
+    </p>
+  </div>
+
+  <!-- Nuevo préstamo -->
+  {% if not cliente.cancelado %}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">➕ Otorgar nuevo préstamo</h5>
+      <form action="{{ url_for('otorgar_prestamo', cliente_id=cliente.id) }}" method="POST" class="row g-2 align-items-center">
+        <div class="col-md-3">
+          <input type="number" name="monto" step="0.01" class="form-control" placeholder="Monto" required>
+        </div>
+        <div class="col-md-2">
+          <input type="number" name="interes" step="0.01" class="form-control" placeholder="% Interés">
+        </div>
+        <div class="col-md-2">
+          <input type="number" name="plazo" class="form-control" placeholder="Plazo (días)">
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-primary w-100">💸 Otorgar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Lista de préstamos -->
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">💰 Préstamos del cliente</h5>
+
+      {% if prestamos %}
+      <table class="table table-bordered table-hover align-middle text-center mt-3">
+        <thead class="table-dark">
+          <tr>
+            <th>Fecha</th>
+            <th>Monto</th>
+            <th>Interés</th>
+            <th>Plazo</th>
+            <th>Saldo</th>
+            <th>Abonos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in prestamos %}
+          <tr>
+            <td>{{ p.fecha.strftime("%d/%m/%Y") }}</td>
+            <td>${{ "%.2f"|format(p.monto) }}</td>
+            <td>{{ "%.2f"|format(p.interes or 0) }}%</td>
+            <td>{{ p.plazo or '-' }}</td>
+            <td>
+              {% if p.saldo <= 0 %}
+                <span class="text-muted">Cancelado</span>
+              {% else %}
+                ${{ "%.2f"|format(p.saldo) }}
+              {% endif %}
+            </td>
+            <td>
+              {% if p.saldo > 0 %}
+              <button class="btn btn-sm btn-outline-success ver-abonos" data-prestamo-id="{{ p.id }}">
+                📜 Ver Abonos
+              </button>
+              {% else %}
+              <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="alert alert-info">No hay préstamos registrados para este cliente.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <a href="{{ url_for('index') }}" class="btn btn-secondary mt-4">⬅️ Volver</a>
+</div>
+
+<!-- Modal de abonos -->
+<div class="modal fade" id="modalAbonos" tabindex="-1" aria-labelledby="modalAbonosLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalAbonosLabel">Historial de Abonos</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm table-bordered text-center align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Monto</th>
+            </tr>
+          </thead>
+          <tbody id="tablaAbonosBody">
+            <tr><td colspan="3"><em>Cargando...</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // Ver abonos del préstamo seleccionado
+  document.querySelectorAll(".ver-abonos").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const prestamoId = btn.dataset.prestamoId;
+      const modal = new bootstrap.Modal(document.getElementById("modalAbonos"));
+      const tbody = document.getElementById("tablaAbonosBody");
+
+      tbody.innerHTML = "<tr><td colspan='3'><em>Cargando...</em></td></tr>";
+
+      try {
+        const response = await fetch(`/historial_abonos/${prestamoId}`);
+        const data = await response.json();
+
+        if (data.abonos.length > 0) {
+          tbody.innerHTML = data.abonos.map(a => `
+            <tr>
+              <td>${a.fecha}</td>
+              <td>${a.hora}</td>
+              <td>$${a.monto.toFixed(2)}</td>
+            </tr>
+          `).join("");
+        } else {
+          tbody.innerHTML = `<tr><td colspan="3"><em>Sin abonos registrados</em></td></tr>`;
+        }
+
+        modal.show();
+      } catch (err) {
+        console.error(err);
+        tbody.innerHTML = `<tr><td colspan="3" class="text-danger">Error al cargar abonos.</td></tr>`;
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

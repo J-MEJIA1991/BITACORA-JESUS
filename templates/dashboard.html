@@ -2,23 +2,52 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <h2>Dashboard</h2>
-<div class="row">
-  <div class="col-md-4">
-    <div class="card p-3">
-      <h5>Total clientes</h5>
+<div class="row g-3">
+  <!-- Total Clientes -->
+  <div class="col-md-3">
+    <div class="card p-3 text-center">
+      <h5>Total Clientes</h5>
       <h3>{{ total_clientes }}</h3>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="card p-3">
-      <h5>Total abonos</h5>
+
+  <!-- Total Abonos -->
+  <div class="col-md-3">
+    <div class="card p-3 text-center">
+      <h5>Total Abonos</h5>
       <h3>{{ "%.2f"|format(total_abonos) }}</h3>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="card p-3">
-      <h5>Total préstamos</h5>
+
+  <!-- Total Préstamos -->
+  <div class="col-md-3">
+    <div class="card p-3 text-center">
+      <h5>Total Préstamos</h5>
       <h3>{{ "%.2f"|format(total_prestamos) }}</h3>
+    </div>
+  </div>
+
+  <!-- Total Productos Registrados -->
+  <div class="col-md-3">
+    <div class="card p-3 text-center">
+      <h5>Total Productos</h5>
+      <h3>{{ total_productos }}</h3>
+    </div>
+  </div>
+
+  <!-- Total Productos Vendidos -->
+  <div class="col-md-3">
+    <div class="card p-3 text-center">
+      <h5>Total Unidades Vendidas</h5>
+      <h3>{{ total_unidades_vendidas }}</h3>
+    </div>
+  </div>
+
+  <!-- Valor Total Vendido -->
+  <div class="col-md-3">
+    <div class="card p-3 text-center">
+      <h5>Valor Total Vendido</h5>
+      <h3>{{ "%.2f"|format(valor_total_vendido) }}</h3>
     </div>
   </div>
 </div>
