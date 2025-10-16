@@ -52,11 +52,12 @@
       <!-- Abono -->
       <td class="abono-td">
         {% if not c.cancelado %}
-        <form action="{{ url_for('registrar_abono_por_codigo') }}" method="post" class="d-flex">
+        <form action="{{ url_for('registrar_abono_por_codigo') }}" method="post" class="d-flex justify-content-center">
           <input type="hidden" name="codigo" value="{{ c.codigo }}">
           <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
-                 class="form-control abono-input text-end" data-codigo="{{ c.codigo }}" required>
-          <button type="submit" class="btn btn-success ms-1 btn-sm">💵</button>
+                 class="form-control text-end abono-input fw-bold"
+                 style="width:120px; height:50px; font-size:1.4rem;" required>
+          <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
         </form>
         {% else %}
           <span class="text-muted">Cancelado</span>
@@ -176,33 +177,45 @@ document.addEventListener("DOMContentLoaded", () => {
   color: #721c24;
 }
 
-/* 🔹 Input de abonos más grande y visible en móviles */
-.abono-input {
-  font-size: 4em; /* 400% */
-  padding: 0.5em;
-  height: 1.6em;
-  text-align: right;
+/* 📱 Ajustes responsivos: igual que el input de productos */
+@media (max-width: 768px) {
+  .abono-input {
+    width: 160px !important;
+    height: 60px !important;
+    font-size: 1.8rem !important;
+  }
+  .btn-success {
+    font-size: 1.8rem !important;
+    padding: 5px 20px !important;
+  }
 }
 
-/* 🔹 Que el botón 💵 quede alineado verticalmente con el input */
+/* 💻 En pantallas grandes */
+@media (min-width: 769px) {
+  .abono-input {
+    width: 120px;
+    height: 50px;
+    font-size: 1.4rem;
+  }
+  .btn-success {
+    font-size: 1.4rem;
+    padding: 0 15px;
+  }
+}
+
+/* 🔹 Alineación del formulario */
 .abono-td form {
   align-items: center;
+  justify-content: center;
+  gap: 0.3em;
 }
 
-/* 🔹 Estilo del botón de saldo */
+/* 🔹 Botón de saldo */
 .saldo-clickable {
   font-size: 1em;
   font-weight: bold;
   color: #0d6efd;
   text-decoration: underline;
-}
-
-/* 🔹 Ajuste responsivo: en pantallas chicas, el input ocupa todo el ancho */
-@media (max-width: 768px) {
-  .abono-input {
-    width: 100%;
-    font-size: 4em;
-  }
 }
 </style>
 
