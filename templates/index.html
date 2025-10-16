@@ -175,15 +175,34 @@ document.addEventListener("DOMContentLoaded", () => {
   background-color: #f8d7da;
   color: #721c24;
 }
+
+/* 🔹 Input de abonos más grande y visible en móviles */
 .abono-input {
-  font-size: 2em; /* 200% */
-  padding: 0.4em;
+  font-size: 4em; /* 400% */
+  padding: 0.5em;
+  height: 1.6em;
+  text-align: right;
 }
+
+/* 🔹 Que el botón 💵 quede alineado verticalmente con el input */
+.abono-td form {
+  align-items: center;
+}
+
+/* 🔹 Estilo del botón de saldo */
 .saldo-clickable {
   font-size: 1em;
   font-weight: bold;
   color: #0d6efd;
   text-decoration: underline;
+}
+
+/* 🔹 Ajuste responsivo: en pantallas chicas, el input ocupa todo el ancho */
+@media (max-width: 768px) {
+  .abono-input {
+    width: 100%;
+    font-size: 4em;
+  }
 }
 </style>
 
