@@ -31,8 +31,8 @@ migrate = Migrate(app, db)
 # ---------------------------
 # LOGIN
 # ---------------------------
-VALID_USER = "mjesus40"
-VALID_PASS = "198409"
+VALID_USER = "j-mejia"
+VALID_PASS = "honny"
 
 def login_required(f):
     @wraps(f)
