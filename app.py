@@ -977,7 +977,6 @@ def actualizar_orden(cliente_id):
 # ---------------------------
 # CRUD CLIENTE
 # ---------------------------
-
 @app.route('/nuevo_cliente', methods=['GET', 'POST'])
 @login_required
 def nuevo_cliente():
@@ -1019,7 +1018,7 @@ def nuevo_cliente():
                 )
                 db.session.add(nuevo_prestamo)
 
-                # 🔹 Importante: registrar como PRÉSTAMO (no como salida)
+                # 🔹 Registrar como PRÉSTAMO (no salida)
                 mov = MovimientoCaja(
                     tipo='prestamo',
                     monto=monto,
@@ -1028,13 +1027,15 @@ def nuevo_cliente():
                 )
                 db.session.add(mov)
 
-                # Actualizar saldo del cliente SOLO con este préstamo actual
+                # Actualizar saldo del cliente
                 cliente_existente.saldo = saldo_total
 
             db.session.commit()
             actualizar_liquidacion_por_movimiento(date.today())
             flash(f"Cliente {cliente_existente.nombre} reactivado correctamente.", "success")
-            return redirect(url_for('nuevo_cliente'))
+
+            # 👇 Redirigir al cliente reactivado
+            return redirect(url_for('index', resaltado=cliente_existente.id))
 
         # 👉 Caso 2: el código ya existe y NO está cancelado → no crear otro cliente
         if cliente_existente and not cliente_existente.cancelado:
@@ -1066,7 +1067,7 @@ def nuevo_cliente():
             )
             db.session.add(nuevo_prestamo)
 
-            # 🔹 Importante: registrar como PRÉSTAMO (no como salida)
+            # 🔹 Registrar como PRÉSTAMO (no salida)
             mov = MovimientoCaja(
                 tipo='prestamo',
                 monto=monto,
@@ -1082,11 +1083,16 @@ def nuevo_cliente():
             actualizar_liquidacion_por_movimiento(date.today())
 
         flash(f"Cliente {nombre or codigo} creado correctamente.", "success")
-        return redirect(url_for('nuevo_cliente'))
+
+        # 👇 Redirigir al listado principal y resaltar el nuevo cliente
+        return redirect(url_for('index', resaltado=cliente.id))
 
     # Sugerir un código para el formulario
     codigo_sugerido = generar_codigo_cliente()
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
+
+
+
 
 @app.route('/eliminar_cliente/<int:cliente_id>', methods=['POST'])
 @login_required
