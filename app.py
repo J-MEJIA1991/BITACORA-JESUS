@@ -261,6 +261,8 @@ def actualizar_liquidacion_por_movimiento(fecha: date):
 # ---------------------------
 # RUTAS
 # ---------------------------
+from datetime import timedelta
+
 @app.route('/')
 @login_required
 def index():
@@ -269,16 +271,34 @@ def index():
         .order_by(Cliente.orden.asc().nullsfirst(), Cliente.id.asc())\
         .all()
 
-    # Mantener orden numérico limpio
+    # 🧮 Mantener orden numérico limpio
     for idx, c in enumerate(clientes, start=1):
         if not c.orden or c.orden != idx:
             c.orden = idx
     db.session.commit()
 
-    # Obtener resumen general
-    resumen = obtener_resumen_total()
+    # 📆 Calcular estado del plazo (para colores)
     hoy = date.today()
+    for c in clientes:
+        estado = "normal"
+        if c.prestamos:
+            # Último préstamo del cliente (más reciente)
+            ultimo_prestamo = max(c.prestamos, key=lambda p: p.fecha)
+            if ultimo_prestamo.plazo:
+                fecha_vencimiento = ultimo_prestamo.fecha + timedelta(days=ultimo_prestamo.plazo)
+                dias_pasados = (hoy - fecha_vencimiento).days
+                # 🟧 Entre 0 y 29 días después del vencimiento → naranja
+                if dias_pasados >= 0 and dias_pasados < 30:
+                    estado = "vencido"
+                # 🔴 30 días o más → rojo
+                elif dias_pasados >= 30:
+                    estado = "moroso"
+        c.estado_plazo = estado  # 👈 Se usa en el template (index.html)
 
+    # 📊 Obtener resumen general (caja y cartera)
+    resumen = obtener_resumen_total()
+
+    # 🗓️ Render principal
     return render_template('index.html', clientes=clientes, resumen=resumen, hoy=hoy)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -387,15 +407,22 @@ def otorgar_prestamo(cliente_id):
 def registrar_abono_por_codigo():
     codigo = request.form.get('codigo', '').strip()
     monto = float(request.form.get('monto') or 0)
+
     if monto <= 0:
-        flash('Monto inválido', 'danger')
-        return redirect(url_for('liquidacion'))
+        msg = 'Monto inválido'
+        flash(msg, 'danger')
+        if request.headers.get('X-Requested-With') == 'fetch':
+            return jsonify({'ok': False, 'error': msg}), 400
+        return redirect(url_for('index'))
 
     # 🔎 Buscar cliente por código
     cliente = Cliente.query.filter_by(codigo=codigo).first()
     if not cliente:
-        flash('Código no encontrado', 'danger')
-        return redirect(url_for('liquidacion'))
+        msg = 'Código no encontrado'
+        flash(msg, 'danger')
+        if request.headers.get('X-Requested-With') == 'fetch':
+            return jsonify({'ok': False, 'error': msg}), 404
+        return redirect(url_for('index'))
 
     # 🔍 Buscar préstamo activo (más reciente con saldo > 0)
     prestamo = (
@@ -405,32 +432,53 @@ def registrar_abono_por_codigo():
         .first()
     )
     if not prestamo:
-        flash('Cliente sin préstamos pendientes', 'warning')
-        return redirect(url_for('liquidacion'))
+        msg = 'Cliente sin préstamos pendientes'
+        flash(msg, 'warning')
+        if request.headers.get('X-Requested-With') == 'fetch':
+            return jsonify({'ok': False, 'error': msg}), 400
+        return redirect(url_for('index'))
 
-    # 💰 Registrar el abono (solo en tabla Abono)
+    # 💰 Registrar el abono
     abono = Abono(prestamo_id=prestamo.id, monto=monto, fecha=datetime.now())
     db.session.add(abono)
 
     # 🔄 Actualizar saldo del préstamo
     prestamo.saldo = max(0.0, (prestamo.saldo or 0) - monto)
-    db.session.commit()
 
-    # 📉 Recalcular saldo total del cliente
-    saldo_total = cliente.saldo_total()
+    # 🔁 Recalcular saldo total del cliente (sumando todos los préstamos)
+    total_saldo_cliente = db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0)) \
+        .filter(Prestamo.cliente_id == cliente.id).scalar() or 0.0
+    cliente.saldo = total_saldo_cliente
+
+    # 🟢 Registrar fecha del último abono (para pintar el input en verde hoy)
+    cliente.ultimo_abono_fecha = datetime.now().date()
 
     # ✅ Si quedó en cero, marcar como cancelado
-    if round(saldo_total, 2) <= 0:
+    cancelado = False
+    if round(cliente.saldo, 2) <= 0:
         cliente.cancelado = True
         cliente.saldo = 0.0
-        db.session.commit()
+        cancelado = True
         flash(f"✅ {cliente.nombre} quedó en saldo 0 y fue movido a Clientes Cancelados.", "info")
 
-    # 🔄 Actualizar la liquidación del día (sin registrar movimiento de caja)
+    db.session.commit()
+
+    # 🔄 Actualizar liquidación del día
     actualizar_liquidacion_por_movimiento(date.today())
 
+    # ⚡ Si la solicitud viene por fetch (AJAX), devolvemos JSON para actualizar en pantalla
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return jsonify({
+            'ok': True,
+            'cliente_id': cliente.id,
+            'saldo': float(cliente.saldo),
+            'cancelado': cancelado,
+            'fecha_abono': cliente.ultimo_abono_fecha.strftime('%Y-%m-%d')
+        }), 200
+
+    # 🚀 Si no viene por fetch, redirigimos normalmente
     flash(f'💰 Abono de ${monto:.2f} registrado para {cliente.nombre}', 'success')
-    return redirect(url_for('liquidacion'))
+    return redirect(url_for('index'))
 
 @app.route('/historial_abonos/<int:cliente_id>')
 @login_required
@@ -499,36 +547,56 @@ def abonar(cliente_id):
 @app.route('/eliminar_abono/<int:abono_id>', methods=['POST'])
 @login_required
 def eliminar_abono(abono_id):
-    abono = Abono.query.get_or_404(abono_id)
+    try:
+        abono = Abono.query.get_or_404(abono_id)
+        prestamo = abono.prestamo
+        cliente = prestamo.cliente
 
-    # Buscar cliente relacionado
-    cliente = (
-        Cliente.query.join(Prestamo, Cliente.id == Prestamo.cliente_id)
-        .filter(Prestamo.id == abono.prestamo_id)
-        .first()
-    )
+        # 1️⃣ Restore the loan balance
+        prestamo.saldo = (prestamo.saldo or 0) + (abono.monto or 0)
 
-    if not cliente:
-        flash("No se encontró el cliente asociado a este abono.", "danger")
+        # 2️⃣ Delete the payment
+        db.session.delete(abono)
+        db.session.flush()
+
+        # 3️⃣ Recalculate total balance for the client
+        total_saldo_cliente = db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0)) \
+            .filter(Prestamo.cliente_id == cliente.id).scalar() or 0.0
+        cliente.saldo = total_saldo_cliente
+
+        # 4️⃣ Reactivate if the client was cancelled
+        if cliente.cancelado and round(cliente.saldo, 2) > 0:
+            cliente.cancelado = False
+
+        # 5️⃣ Update liquidation
+        actualizar_liquidacion_por_movimiento(abono.fecha.date())
+
+        db.session.commit()
+
+        # ✅ If called from AJAX (fetch)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({
+                "ok": True,
+                "cliente_id": cliente.id,
+                "saldo": float(cliente.saldo),
+                "cancelado": cliente.cancelado
+            }), 200
+
+        # ✅ Normal form case (redirect)
+        flash(f"🗑️ Abono de ${abono.monto:.2f} eliminado correctamente.", "info")
         return redirect(url_for('index'))
 
-    # Revertir el saldo del cliente
-    cliente.saldo += abono.monto
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
 
-    # ✅ Si el cliente estaba cancelado, reactivarlo automáticamente
-    if cliente.cancelado and cliente.saldo > 0:
-        cliente.cancelado = False
-        flash(f"El cliente {cliente.nombre} fue reactivado automáticamente.", "info")
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": str(e)}), 500
 
-    # Eliminar el abono
-    db.session.delete(abono)
-    db.session.commit()
+        flash("❌ Error interno al eliminar abono.", "danger")
+        return redirect(url_for('index'))
 
-    # Actualizar la liquidación
-    actualizar_liquidacion_por_movimiento(date.today())
-
-    flash(f"🗑️ Se eliminó el abono de ${abono.monto:.2f} de {cliente.nombre}.", "warning")
-    return redirect(url_for('index'))
 
 # ---------------------------
 # RUTAS DE CAJA
@@ -888,6 +956,24 @@ def gastos_por_dia(fecha):
 
     return render_template('gastos_por_dia.html', gastos=gastos, fecha=fecha_obj, total_gastos=total_gastos)
 
+
+# 👇 ESTA ES LA PARTE QUE FALTABA PEGAR CORRECTAMENTE
+@app.route('/actualizar_orden/<int:cliente_id>', methods=['POST'])
+@login_required
+def actualizar_orden(cliente_id):
+    nueva_orden = request.form.get('orden', type=int)
+    if nueva_orden is None:
+        flash("Debe ingresar un número de orden válido.", "warning")
+        return redirect(url_for('index'))
+
+    cliente = Cliente.query.get_or_404(cliente_id)
+    cliente.orden = nueva_orden
+    db.session.commit()
+
+    flash(f"Orden del cliente {cliente.nombre} actualizada a {nueva_orden}.", "success")
+    return redirect(url_for('index'))
+
+
 # ---------------------------
 # CRUD CLIENTE
 # ---------------------------
@@ -1002,47 +1088,17 @@ def nuevo_cliente():
     codigo_sugerido = generar_codigo_cliente()
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
 
-
-@app.route('/actualizar_orden/<int:cliente_id>', methods=['POST'])
-@login_required
-def actualizar_orden(cliente_id):
-    nueva_orden = request.form.get('orden', type=int)
-    if nueva_orden is None:
-        flash("Debe ingresar un número de orden válido.", "warning")
-        return redirect(url_for('index'))
-
-    cliente = Cliente.query.get_or_404(cliente_id)
-    cliente.orden = nueva_orden
-    db.session.commit()
-
-    flash(f"Orden del cliente {cliente.nombre} actualizada a {nueva_orden}.", "success")
-    return redirect(url_for('index'))
-
 @app.route('/eliminar_cliente/<int:cliente_id>', methods=['POST'])
 @login_required
 def eliminar_cliente(cliente_id):
     cliente = Cliente.query.get_or_404(cliente_id)
-    for p in cliente.prestamos:
-        Abono.query.filter_by(prestamo_id=p.id).delete()
-        db.session.delete(p)
-    db.session.delete(cliente)
-    db.session.commit()
-    flash(f"Cliente {cliente.nombre} eliminado correctamente.", "success")
-    return redirect(url_for('index'))
 
-@app.route('/api/cliente/<codigo>')
-@login_required
-def api_cliente_por_codigo(codigo):
-    cliente = Cliente.query.filter_by(codigo=codigo).first()
-    if cliente:
-        return jsonify({
-            'existe': True,
-            'nombre': cliente.nombre,
-            'direccion': cliente.direccion or '',
-            'telefono': cliente.telefono or '',
-            'cancelado': cliente.cancelado
-        })
-    return jsonify({'existe': False})
+    # ❗ No se elimina de la base de datos, solo se marca como cancelado
+    cliente.cancelado = True
+    db.session.commit()
+
+    flash(f"🚫 Cliente {cliente.nombre} fue cancelado correctamente.", "warning")
+    return redirect(url_for('index'))
 
 
 # ---------------------------
