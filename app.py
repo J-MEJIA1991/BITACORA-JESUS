@@ -35,8 +35,8 @@ migrate = Migrate(app, db)
 # -------------------------------------------------
 # 🔐 LOGIN Y SESIÓN
 # -------------------------------------------------
-VALID_USER = "j-mejia"
-VALID_PASS = "honny"
+VALID_USER = "manuel"
+VALID_PASS = "12345"
 
 
 def login_required(f):
