@@ -42,7 +42,7 @@
     {% for c in clientes %}
     <tr id="cliente-{{ c.id }}"
         class="{% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}">
-      
+
       <!-- ORDEN -->
       <td style="width:100px;">
         <form action="{{ url_for('rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
@@ -167,7 +167,7 @@
   </div>
 </div>
 
-<!-- =================== MODAL HISTORIAL DE ABONOS =================== -->
+<!-- =================== MODAL HISTORIAL =================== -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
@@ -176,9 +176,7 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-
-        <!-- 🧾 DATOS DEL PRÉSTAMO -->
-        <h6 class="fw-bold mb-3">Datos del Artículo / Préstamo</h6>
+        <h6 class="fw-bold mb-3">Datos del Préstamo</h6>
         <table class="table table-sm table-bordered align-middle text-center">
           <thead class="table-light">
             <tr>
@@ -186,58 +184,55 @@
               <th>Cuota</th><th>Modo</th><th>Datos</th><th>Saldo</th>
             </tr>
           </thead>
-          <tbody id="tablaDatosPrestamo">
-            <tr><td colspan="8"><em>Cargando datos...</em></td></tr>
-          </tbody>
+          <tbody id="tablaDatosPrestamo"><tr><td colspan="8"><em>Cargando...</em></td></tr></tbody>
         </table>
-
-        <!-- 💰 HISTORIAL DE ABONOS -->
         <h6 class="fw-bold mt-4 mb-3">Historial de Abonos</h6>
         <table class="table table-sm table-bordered text-center align-middle">
-          <thead class="table-light">
-            <tr>
-              <th>Código</th><th>Fecha</th><th>Hora</th><th>Abono</th><th>Saldo</th><th>Acción</th>
-            </tr>
-          </thead>
-          <tbody id="tablaHistorialBody">
-            <tr><td colspan="6"><em>Cargando...</em></td></tr>
-          </tbody>
+          <thead class="table-light"><tr><th>Código</th><th>Fecha</th><th>Hora</th><th>Abono</th><th>Saldo</th><th>Acción</th></tr></thead>
+          <tbody id="tablaHistorialBody"><tr><td colspan="6"><em>Cargando...</em></td></tr></tbody>
         </table>
-
       </div>
     </div>
   </div>
 </div>
 
-<!-- =================== JAVASCRIPT =================== -->
+<!-- =================== SCRIPTS =================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  // ===================== MODAL EDITAR PRÉSTAMO =====================
   const modalEditar = new bootstrap.Modal(document.getElementById("modalEditarPrestamo"));
   const formEditar = document.getElementById("formEditarPrestamo");
 
+  // --- Reproducir sonido de confirmación o error ---
+  function playSound(success = true) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = success ? "triangle" : "sawtooth";
+      osc.frequency.setValueAtTime(success ? 880 : 220, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {}
+  }
+
+  // --- Editar préstamo ---
   document.querySelectorAll(".editar-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.id;
-      const nombre = btn.dataset.nombre;
-      document.getElementById("clienteNombre").textContent = nombre;
-
+      document.getElementById("clienteNombre").textContent = btn.dataset.nombre;
       try {
         const res = await fetch(`/editar_prestamo/${id}`);
         const data = await res.json();
-        if (!data.ok) {
-          alert(data.error || "Error al cargar los datos del préstamo.");
-          return;
-        }
-        document.getElementById("editarPlazo").value = data.data.plazo || "";
-        document.getElementById("editarInteres").value = data.data.interes || "";
+        if (!data.ok) return alert(data.error || "Error al cargar datos.");
+        document.getElementById("editarPlazo").value = data.data.plazo;
+        document.getElementById("editarInteres").value = data.data.interes;
         document.getElementById("editarFrecuencia").value = data.data.frecuencia || "diario";
         formEditar.dataset.id = id;
         modalEditar.show();
-      } catch (err) {
-        console.error(err);
-        alert("Error al obtener los datos del préstamo.");
-      }
+      } catch { alert("Error de conexión."); }
     });
   });
 
@@ -245,109 +240,59 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const id = formEditar.dataset.id;
     const formData = new FormData(formEditar);
-    try {
-      const res = await fetch(`/editar_prestamo/${id}`, { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.ok) {
-        alert("✅ " + data.msg);
-        modalEditar.hide();
-        location.reload();
-      } else {
-        alert("❌ " + (data.error || "Error al guardar los cambios."));
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error al enviar los datos del préstamo.");
-    }
+    const res = await fetch(`/editar_prestamo/${id}`, { method: "POST", body: formData });
+    const data = await res.json();
+    if (data.ok) { alert("✅ Cambios guardados."); location.reload(); }
+    else alert("❌ " + (data.error || "Error al guardar."));
   });
 
-  // ===================== HISTORIAL DE ABONOS =====================
-  document.querySelectorAll('.saldo-clickable').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const clienteId = btn.dataset.clienteId;
-      const modal = new bootstrap.Modal(document.getElementById('modalHistorial'));
-      const datosTbody = document.getElementById("tablaDatosPrestamo");
-      const abonosTbody = document.getElementById("tablaHistorialBody");
-
-      datosTbody.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
-      abonosTbody.innerHTML = `<tr><td colspan="6"><em>Cargando...</em></td></tr>`;
-
+  // --- Registrar abonos en vivo ---
+  const forms = document.querySelectorAll(".form-abono");
+  const hoy = new Date().toISOString().slice(0, 10);
+  forms.forEach(form => {
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const input = form.querySelector("input[name='monto']");
+      const formData = new FormData(form);
       try {
-        const res = await fetch(`/historial_abonos/${clienteId}`);
+        const res = await fetch(form.action, { method: "POST", body: formData, headers: { "X-Requested-With": "fetch" } });
         const data = await res.json();
+        if (!res.ok || !data.ok) { playSound(false); alert(data.error || "❌ Error."); return; }
+        playSound(true);
+        input.value = "";
+        input.classList.add("bg-success","text-white");
+        const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${data.cliente_id}"]`);
+        if (saldoElem) {
+          saldoElem.textContent = data.saldo.toFixed(2);
+          saldoElem.style.transition = "background-color 0.6s";
+          saldoElem.style.backgroundColor = "rgba(0,255,0,0.2)";
+          setTimeout(() => saldoElem.style.backgroundColor = "", 800);
+        }
+        const actual = parseInt(form.dataset.orden);
+        const siguiente = document.querySelector(`.form-abono[data-orden="${actual + 1}"]`);
+        (siguiente || forms[0]).querySelector("input[name='monto']").focus();
+      } catch (err) { playSound(false); alert("Error al conectar."); }
+    });
+  });
 
-        // 🧾 DATOS DEL PRÉSTAMO
+  // --- Historial de abonos ---
+  document.querySelectorAll(".saldo-clickable").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.clienteId;
+      const modal = new bootstrap.Modal(document.getElementById("modalHistorial"));
+      const datos = document.getElementById("tablaDatosPrestamo");
+      const tbody = document.getElementById("tablaHistorialBody");
+      datos.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><em>Cargando...</em></td></tr>`;
+      try {
+        const res = await fetch(`/historial_abonos/${id}`);
+        const data = await res.json();
+        if (!data.ok) return alert("Error al obtener historial.");
         const p = data.prestamo;
-        datosTbody.innerHTML = `
-          <tr>
-            <td>${p.nombre}</td>
-            <td>${p.fecha_inicial}</td>
-            <td>$${p.monto.toFixed(2)}</td>
-            <td>$${p.total.toFixed(2)}</td>
-            <td>$${p.cuota.toFixed(2)}</td>
-            <td>${p.modo}</td>
-            <td>${p.datos}</td>
-            <td>$${p.saldo.toFixed(2)}</td>
-          </tr>
-        `;
-
-        // 💰 HISTORIAL DE ABONOS
-        abonosTbody.innerHTML = data.abonos.map(a => `
-          <tr>
-            <td>${a.codigo}</td>
-            <td>${a.fecha}</td>
-            <td>${a.hora}</td>
-            <td>$${a.monto.toFixed(2)}</td>
-            <td>$${a.saldo.toFixed(2)}</td>
-            <td>
-              ${a.id > 0
-                ? `<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${clienteId}">🗑️</button>`
-                : `<span class="text-muted">—</span>`}
-            </td>
-          </tr>
-        `).join("");
-
-        // 🔹 ELIMINAR ABONO SIN RECARGAR
-        document.querySelectorAll(".eliminar-abono").forEach(boton => {
-          boton.addEventListener("click", async () => {
-            if (!confirm("¿Seguro que deseas eliminar este abono?")) return;
-            const id = boton.dataset.id;
-            const cliente = boton.dataset.cliente;
-
-            try {
-              const r = await fetch(`/eliminar_abono/${id}`, {
-                method: "POST",
-                headers: { "X-Requested-With": "fetch" }
-              });
-              const resp = await r.json();
-
-              if (resp.ok) {
-                boton.closest("tr").remove();
-
-                // 💲 Actualizar saldo
-                const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${cliente}"]`);
-                if (saldoElem) {
-                  saldoElem.textContent = resp.saldo.toFixed(2);
-                  saldoElem.style.transition = "background-color 0.6s";
-                  saldoElem.style.backgroundColor = "rgba(255,0,0,0.2)";
-                  setTimeout(() => saldoElem.style.backgroundColor = "", 800);
-                }
-              } else {
-                alert(resp.error || "Error al eliminar el abono.");
-              }
-            } catch (err) {
-              console.error(err);
-              alert("Error al eliminar abono.");
-            }
-          });
-        });
-
+        datos.innerHTML = `<tr><td>${p.nombre}</td><td>${p.fecha_inicial}</td><td>$${p.monto.toFixed(2)}</td><td>$${p.total.toFixed(2)}</td><td>$${p.cuota.toFixed(2)}</td><td>${p.modo}</td><td>${p.datos}</td><td>$${p.saldo.toFixed(2)}</td></tr>`;
+        tbody.innerHTML = data.abonos.map(a => `<tr><td>${a.codigo}</td><td>${a.fecha}</td><td>${a.hora}</td><td>$${a.monto.toFixed(2)}</td><td>$${a.saldo.toFixed(2)}</td><td>${a.id>0?`<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${id}">🗑️</button>`:"<span>—</span>"}</td></tr>`).join("");
         modal.show();
-
-      } catch (err) {
-        console.error(err);
-        alert("Error al cargar historial.");
-      }
+      } catch { alert("Error al cargar historial."); }
     });
   });
 });
@@ -360,6 +305,7 @@ document.addEventListener("DOMContentLoaded", () => {
 .plazo-moroso { background-color: rgba(255,0,0,0.15)!important; }
 .abono-td form { align-items:center; justify-content:center; gap:0.3em; }
 .saldo-clickable { font-size:1em; font-weight:bold; color:#0d6efd; text-decoration:underline; cursor:pointer; }
-.table-sm th, .table-sm td { vertical-align: middle; }
+.fila-parpadea { animation: parpadeoVerde 1s ease-out; }
+@keyframes parpadeoVerde { 0%{background-color:#d4edda;} 50%{background-color:#b6e0c3;} 100%{background-color:transparent;} }
 </style>
 {% endblock %}
