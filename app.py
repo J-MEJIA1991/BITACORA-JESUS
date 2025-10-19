@@ -11,12 +11,11 @@ from rutas import bp as rutas_bp
 # -------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
-
 # -------------------------------------------------
 # 🗄️ CONFIGURACIÓN DE BASE DE DATOS (Neon PostgreSQL)
 # -------------------------------------------------
 DB_DEFAULT = (
-   neondb_owner:npg_Jom4Ed6OAMLh@ep-frosty-snow-adg8fr51-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    "postgresql://neondb_owner:npg_Jom4Ed6OAMLh@ep-frosty-snow-adg8fr51-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
 DATABASE_URL = os.getenv("DATABASE_URL", DB_DEFAULT)
 
@@ -38,6 +37,7 @@ migrate = Migrate(app, db)
 # -------------------------------------------------
 VALID_USER = "j-mejia"
 VALID_PASS = "honny"
+
 
 def login_required(f):
     """Decorador para proteger las rutas que requieren sesión activa."""
