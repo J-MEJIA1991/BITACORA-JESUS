@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}Inicio{% endblock %}
 
@@ -134,9 +135,9 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <form id="formEditarPrestamo" method="POST">
-        <div class="modal-header">
+        <div class="modal-header bg-primary text-white">
           <h5 class="modal-title">Editar Préstamo de <span id="clienteNombre"></span></h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="mb-3">
@@ -159,7 +160,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+          <button type="submit" class="btn btn-success">Guardar Cambios</button>
         </div>
       </form>
     </div>
@@ -168,27 +169,41 @@
 
 <!-- =================== MODAL HISTORIAL DE ABONOS =================== -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalHistorialLabel">Historial de Abonos</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalHistorialLabel">📘 Detalles del Cliente</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+
+        <!-- 🧾 DATOS DEL PRÉSTAMO -->
+        <h6 class="fw-bold mb-3">Datos del Artículo / Préstamo</h6>
+        <table class="table table-sm table-bordered align-middle text-center">
+          <thead class="table-light">
+            <tr>
+              <th>Nombre</th><th>Fecha inicial</th><th>Monto</th><th>Total</th>
+              <th>Cuota</th><th>Modo</th><th>Datos</th><th>Saldo</th>
+            </tr>
+          </thead>
+          <tbody id="tablaDatosPrestamo">
+            <tr><td colspan="8"><em>Cargando datos...</em></td></tr>
+          </tbody>
+        </table>
+
+        <!-- 💰 HISTORIAL DE ABONOS -->
+        <h6 class="fw-bold mt-4 mb-3">Historial de Abonos</h6>
         <table class="table table-sm table-bordered text-center align-middle">
           <thead class="table-light">
             <tr>
-              <th>Fecha</th>
-              <th>Hora</th>
-              <th>Nombre</th>
-              <th>Monto</th>
-              <th>Acción</th>
+              <th>Código</th><th>Fecha</th><th>Hora</th><th>Abono</th><th>Saldo</th><th>Acción</th>
             </tr>
           </thead>
           <tbody id="tablaHistorialBody">
-            <tr><td colspan="5"><em>Cargando...</em></td></tr>
+            <tr><td colspan="6"><em>Cargando...</em></td></tr>
           </tbody>
         </table>
+
       </div>
     </div>
   </div>
@@ -197,7 +212,7 @@
 <!-- =================== JAVASCRIPT =================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  // --- MODAL EDITAR PRÉSTAMO ---
+  // ===================== MODAL EDITAR PRÉSTAMO =====================
   const modalEditar = new bootstrap.Modal(document.getElementById("modalEditarPrestamo"));
   const formEditar = document.getElementById("formEditarPrestamo");
 
@@ -246,30 +261,89 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- HISTORIAL DE ABONOS ---
+  // ===================== HISTORIAL DE ABONOS =====================
   document.querySelectorAll('.saldo-clickable').forEach(btn => {
     btn.addEventListener('click', async () => {
       const clienteId = btn.dataset.clienteId;
       const modal = new bootstrap.Modal(document.getElementById('modalHistorial'));
-      const tbody = document.getElementById("tablaHistorialBody");
-      tbody.innerHTML = `<tr><td colspan="5"><em>Cargando...</em></td></tr>`;
+      const datosTbody = document.getElementById("tablaDatosPrestamo");
+      const abonosTbody = document.getElementById("tablaHistorialBody");
+
+      datosTbody.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
+      abonosTbody.innerHTML = `<tr><td colspan="6"><em>Cargando...</em></td></tr>`;
 
       try {
         const res = await fetch(`/historial_abonos/${clienteId}`);
         const data = await res.json();
-        if (data.abonos && data.abonos.length > 0) {
-          tbody.innerHTML = data.abonos.map(a => `
-            <tr>
-              <td>${a.fecha}</td>
-              <td>${a.hora || ""}</td>
-              <td>${a.nombre || ""}</td>
-              <td>$${a.monto.toFixed(2)}</td>
-              <td><button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}">🗑️</button></td>
-            </tr>`).join("");
-        } else {
-          tbody.innerHTML = `<tr><td colspan="5"><em>No hay abonos registrados</em></td></tr>`;
-        }
+
+        // 🧾 DATOS DEL PRÉSTAMO
+        const p = data.prestamo;
+        datosTbody.innerHTML = `
+          <tr>
+            <td>${p.nombre}</td>
+            <td>${p.fecha_inicial}</td>
+            <td>$${p.monto.toFixed(2)}</td>
+            <td>$${p.total.toFixed(2)}</td>
+            <td>$${p.cuota.toFixed(2)}</td>
+            <td>${p.modo}</td>
+            <td>${p.datos}</td>
+            <td>$${p.saldo.toFixed(2)}</td>
+          </tr>
+        `;
+
+        // 💰 HISTORIAL DE ABONOS
+        abonosTbody.innerHTML = data.abonos.map(a => `
+          <tr>
+            <td>${a.codigo}</td>
+            <td>${a.fecha}</td>
+            <td>${a.hora}</td>
+            <td>$${a.monto.toFixed(2)}</td>
+            <td>$${a.saldo.toFixed(2)}</td>
+            <td>
+              ${a.id > 0
+                ? `<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${clienteId}">🗑️</button>`
+                : `<span class="text-muted">—</span>`}
+            </td>
+          </tr>
+        `).join("");
+
+        // 🔹 ELIMINAR ABONO SIN RECARGAR
+        document.querySelectorAll(".eliminar-abono").forEach(boton => {
+          boton.addEventListener("click", async () => {
+            if (!confirm("¿Seguro que deseas eliminar este abono?")) return;
+            const id = boton.dataset.id;
+            const cliente = boton.dataset.cliente;
+
+            try {
+              const r = await fetch(`/eliminar_abono/${id}`, {
+                method: "POST",
+                headers: { "X-Requested-With": "fetch" }
+              });
+              const resp = await r.json();
+
+              if (resp.ok) {
+                boton.closest("tr").remove();
+
+                // 💲 Actualizar saldo
+                const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${cliente}"]`);
+                if (saldoElem) {
+                  saldoElem.textContent = resp.saldo.toFixed(2);
+                  saldoElem.style.transition = "background-color 0.6s";
+                  saldoElem.style.backgroundColor = "rgba(255,0,0,0.2)";
+                  setTimeout(() => saldoElem.style.backgroundColor = "", 800);
+                }
+              } else {
+                alert(resp.error || "Error al eliminar el abono.");
+              }
+            } catch (err) {
+              console.error(err);
+              alert("Error al eliminar abono.");
+            }
+          });
+        });
+
         modal.show();
+
       } catch (err) {
         console.error(err);
         alert("Error al cargar historial.");
@@ -286,5 +360,6 @@ document.addEventListener("DOMContentLoaded", () => {
 .plazo-moroso { background-color: rgba(255,0,0,0.15)!important; }
 .abono-td form { align-items:center; justify-content:center; gap:0.3em; }
 .saldo-clickable { font-size:1em; font-weight:bold; color:#0d6efd; text-decoration:underline; cursor:pointer; }
+.table-sm th, .table-sm td { vertical-align: middle; }
 </style>
 {% endblock %}

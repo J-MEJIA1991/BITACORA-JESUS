@@ -499,26 +499,94 @@ def registrar_abono_por_codigo():
     flash(f"💰 Abono de ${monto:.2f} registrado para {cliente.nombre}", "success")
     return redirect(url_for("rutas.index"))
 
-
 @bp.route("/historial_abonos/<int:cliente_id>")
 @login_required
 def historial_abonos(cliente_id):
+    from datetime import datetime
     cliente = Cliente.query.get_or_404(cliente_id)
+
+    prestamo = cliente.prestamos[-1] if cliente.prestamos else None
+
+    # =========================
+    # DATOS DEL PRÉSTAMO
+    # =========================
+    if prestamo:
+        monto = float(prestamo.monto or 0.0)
+        interes = float(prestamo.interes or 0.0)
+        plazo = int(prestamo.plazo or 0)
+        total = monto + (monto * interes / 100)
+        cuota = (total / plazo) if plazo > 0 else 0.0
+        modo = prestamo.frecuencia or "—"
+        fecha_inicial = prestamo.fecha.strftime("%d-%m-%Y") if prestamo.fecha else "—"
+    else:
+        monto = total = cuota = 0.0
+        modo = "—"
+        fecha_inicial = "—"
+
+    datos_prestamo = {
+        "nombre": cliente.nombre,
+        "fecha_inicial": fecha_inicial,
+        "monto": monto,
+        "total": total,
+        "cuota": cuota,
+        "modo": modo,
+        "datos": cliente.direccion or "—",
+        "saldo": float(cliente.saldo or 0.0),
+    }
+
+    # =========================
+    # HISTORIAL DE ABONOS (corrigiendo saldo inicial)
+    # =========================
     items = []
-    for p in cliente.prestamos:
-        for a in p.abonos:
+
+    # Si el cliente tiene un saldo real registrado, partimos de ahí;
+    # si no, usamos el total original del préstamo
+    saldo_inicial = float(cliente.saldo or total)
+
+    if prestamo and prestamo.abonos:
+        # Ordenamos del más antiguo al más reciente
+        abonos_ordenados = sorted(prestamo.abonos, key=lambda x: x.fecha)
+
+        # Calculamos el saldo "hacia atrás" desde el saldo actual real
+        # para mostrar cómo se fue formando el saldo en el tiempo
+        saldo_restante = saldo_inicial
+        for a in reversed(abonos_ordenados):
+            saldo_restante += float(a.monto or 0.0)
+
+        # Reiniciamos y recorremos hacia adelante mostrando cómo bajó el saldo
+        saldo_actual = saldo_restante
+        for a in abonos_ordenados:
+            saldo_actual -= float(a.monto or 0.0)
+            if saldo_actual < 0:
+                saldo_actual = 0.0
             items.append({
                 "id": a.id,
-                "fecha_dt": a.fecha,
-                "fecha": a.fecha.strftime("%d/%m/%Y"),
-                "hora": a.fecha.strftime("%H:%M"),
-                "nombre": cliente.nombre,
+                "codigo": cliente.codigo,
+                "fecha": a.fecha.strftime("%d-%m-%Y"),
+                "hora": a.fecha.strftime("%I:%M:%S %p"),
                 "monto": float(a.monto),
+                "saldo": round(saldo_actual, 2)
             })
-    items.sort(key=lambda x: x["fecha_dt"], reverse=True)
-    for it in items:
-        it.pop("fecha_dt", None)
-    return jsonify({"abonos": items})
+
+        # Invertimos para mostrar los más recientes arriba
+        items.reverse()
+
+    # 🔹 Si no hay abonos, agregamos una fila automática
+    if not items:
+        items.append({
+            "id": 0,
+            "codigo": cliente.codigo,
+            "fecha": datetime.today().strftime("%d-%m-%Y"),
+            "hora": "auto",
+            "monto": 0.00,
+            "saldo": round(float(cliente.saldo or total or 0.0), 2)
+        })
+
+    return jsonify({
+        "ok": True,
+        "prestamo": datos_prestamo,
+        "abonos": items
+    })
 
 
 @bp.route("/abonar/<int:cliente_id>", methods=["POST"])
