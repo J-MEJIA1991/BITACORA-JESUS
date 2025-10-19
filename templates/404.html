@@ -6,7 +6,8 @@
   <h1 class="display-4">⚠️ 404</h1>
   <p class="lead mb-4">La página que intentas acceder no existe o ha sido movida.</p>
 
-  <a href="{{ url_for('index') }}" class="btn btn-primary">🏠 Ir al inicio</a>
-  <a href="{{ url_for('login') }}" class="btn btn-outline-secondary">🔑 Iniciar sesión</a>
+  <!-- 🔗 Ajustado para apuntar al blueprint 'rutas' -->
+  <a href="{{ url_for('rutas.index') }}" class="btn btn-primary">🏠 Ir al inicio</a>
+  <a href="{{ url_for('rutas.login') }}" class="btn btn-outline-secondary">🔑 Iniciar sesión</a>
 </div>
 {% endblock %}

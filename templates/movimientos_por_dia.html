@@ -4,16 +4,17 @@
 
 {% block content %}
 <div class="container mt-4">
-  <div class="card shadow-sm">
+  <!-- Encabezado -->
+  <div class="card shadow-sm mb-4">
     <div class="card-body text-center">
-      <h4 class="card-title mb-3">{{ titulo }}</h4>
+      <h4 class="card-title mb-2">{{ titulo }}</h4>
       <h6 class="text-muted">📅 Fecha: {{ fecha.strftime("%d/%m/%Y") }}</h6>
     </div>
   </div>
 
   <!-- Tabla de movimientos -->
-  <div class="table-responsive mt-4">
-    <table class="table table-bordered table-hover text-center align-middle">
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle shadow-sm">
       <thead class="table-dark">
         <tr>
           <th>Fecha y Hora</th>
@@ -45,7 +46,7 @@
         {% endif %}
       </tbody>
       <tfoot>
-        <tr class="fw-bold">
+        <tr class="fw-bold table-light">
           <td colspan="2" class="text-end">Total {{ titulo }}</td>
           <td>${{ "%.2f"|format(total) }}</td>
         </tr>
@@ -55,10 +56,11 @@
 
   <!-- Botón volver -->
   <div class="text-center mt-4">
-    <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary">⬅️ Volver a Liquidación</a>
+    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary">⬅️ Volver a Liquidación</a>
   </div>
 </div>
 
+<!-- 🎨 Estilos -->
 <style>
   .table td, .table th {
     vertical-align: middle;
@@ -66,7 +68,7 @@
   .card {
     border-radius: 12px;
   }
-  .fw-bold td {
+  tfoot td {
     font-weight: 600;
   }
 </style>

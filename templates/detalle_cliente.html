@@ -24,7 +24,7 @@
   <div class="card mb-4 shadow-sm">
     <div class="card-body">
       <h5 class="card-title">➕ Otorgar nuevo préstamo</h5>
-      <form action="{{ url_for('otorgar_prestamo', cliente_id=cliente.id) }}" method="POST" class="row g-2 align-items-center">
+      <form action="{{ url_for('rutas.otorgar_prestamo', cliente_id=cliente.id) }}" method="POST" class="row g-2 align-items-center">
         <div class="col-md-3">
           <input type="number" name="monto" step="0.01" class="form-control" placeholder="Monto" required>
         </div>
@@ -92,7 +92,7 @@
     </div>
   </div>
 
-  <a href="{{ url_for('index') }}" class="btn btn-secondary mt-4">⬅️ Volver</a>
+  <a href="{{ url_for('rutas.index') }}" class="btn btn-secondary mt-4">⬅️ Volver</a>
 </div>
 
 <!-- Modal de abonos -->

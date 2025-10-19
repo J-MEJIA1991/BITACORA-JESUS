@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}Liquidación del Día{% endblock %}
 
@@ -8,9 +9,11 @@
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <h2 class="m-0 text-center w-100">📊 Liquidación del Día</h2>
     <div class="d-flex flex-wrap gap-2 justify-content-center w-100">
-      <a href="{{ url_for('liquidaciones') }}" class="btn btn-secondary btn-sm">📜 Ver Historial</a>
+      <!-- ✅ Corregido: agregar prefijo rutas. -->
+      <a href="{{ url_for('rutas.liquidaciones') }}" class="btn btn-secondary btn-sm">📜 Ver Historial</a>
+
       <!-- 🧹 BOTÓN INTELIGENTE PARA REPARAR CAJA -->
-      <a id="btn-reparar-caja" href="{{ url_for('reparar_caja') }}" 
+      <a id="btn-reparar-caja" href="{{ url_for('rutas.reparar_caja') }}" 
          class="btn btn-outline-danger btn-sm d-none">
          🧹 Reparar Caja
       </a>
@@ -21,7 +24,7 @@
   <div class="d-flex justify-content-between flex-wrap gap-3 mb-4 text-center">
 
     <!-- 💰 Entrada de efectivo -->
-    <form action="{{ url_for('caja_movimiento', tipo='entrada_manual') }}" method="POST"
+    <form action="{{ url_for('rutas.caja_movimiento', tipo='entrada_manual') }}" method="POST"
           class="form-caja bg-light border rounded shadow-sm">
       <h6 class="text-success mb-2">💰 Entrada de Efectivo</h6>
       <input type="number" name="monto" step="0.01" placeholder="Monto"
@@ -32,7 +35,7 @@
     </form>
 
     <!-- 💸 Salida de efectivo -->
-    <form action="{{ url_for('caja_movimiento', tipo='salida') }}" method="POST"
+    <form action="{{ url_for('rutas.caja_movimiento', tipo='salida') }}" method="POST"
           class="form-caja bg-light border rounded shadow-sm">
       <h6 class="text-warning mb-2">💸 Salida de Efectivo</h6>
       <input type="number" name="monto" step="0.01" placeholder="Monto"
@@ -43,7 +46,7 @@
     </form>
 
     <!-- 🧾 Registrar gasto -->
-    <form action="{{ url_for('caja_movimiento', tipo='gasto') }}" method="POST"
+    <form action="{{ url_for('rutas.caja_movimiento', tipo='gasto') }}" method="POST"
           class="form-caja bg-light border rounded shadow-sm">
       <h6 class="text-danger mb-2">🧾 Registrar Gasto</h6>
       <input type="number" name="monto" step="0.01" placeholder="Monto"
@@ -97,7 +100,7 @@
 
         <!-- 💰 Abonos -->
         <td>
-          <a href="{{ url_for('movimientos_por_dia', tipo='abono', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
+          <a href="{{ url_for('rutas.movimientos_por_dia', tipo='abono', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
              class="text-decoration-none text-success fw-bold hover-underline">
             ${{ "%.2f"|format(l.entradas or 0) }}
           </a>
@@ -105,7 +108,7 @@
 
         <!-- 💵 Entradas manuales -->
         <td>
-          <a href="{{ url_for('movimientos_por_dia', tipo='entrada_manual', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
+          <a href="{{ url_for('rutas.movimientos_por_dia', tipo='entrada_manual', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
              class="text-decoration-none text-info fw-bold hover-underline">
             ${{ "%.2f"|format(l.entradas_caja or 0) }}
           </a>
@@ -113,7 +116,7 @@
 
         <!-- 🏦 Préstamos -->
         <td>
-          <a href="{{ url_for('prestamos_por_dia', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
+          <a href="{{ url_for('rutas.prestamos_por_dia', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
              class="text-decoration-none text-primary fw-bold hover-underline">
             ${{ "%.2f"|format(l.prestamos_hoy or 0) }}
           </a>
@@ -121,7 +124,7 @@
 
         <!-- 💸 Salidas -->
         <td>
-          <a href="{{ url_for('movimientos_por_dia', tipo='salida', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
+          <a href="{{ url_for('rutas.movimientos_por_dia', tipo='salida', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
              class="text-decoration-none text-warning fw-bold hover-underline">
             ${{ "%.2f"|format(l.salidas or 0) }}
           </a>
@@ -129,7 +132,7 @@
 
         <!-- 🧾 Gastos -->
         <td>
-          <a href="{{ url_for('movimientos_por_dia', tipo='gasto', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
+          <a href="{{ url_for('rutas.movimientos_por_dia', tipo='gasto', fecha=l.fecha.strftime('%Y-%m-%d')) }}"
              class="text-decoration-none text-danger fw-bold hover-underline">
             ${{ "%.2f"|format(l.gastos or 0) }}
           </a>
@@ -156,7 +159,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const res = await fetch('/revisar_caja_estado');
+    const res = await fetch('{{ url_for("rutas.revisar_caja_estado") }}');
     const data = await res.json();
     if (data.errores > 0) {
       const btn = document.getElementById('btn-reparar-caja');

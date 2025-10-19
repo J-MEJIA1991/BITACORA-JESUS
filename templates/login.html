@@ -1,31 +1,53 @@
+
 {% extends "base.html" %}
 {% block title %}Iniciar Sesión{% endblock %}
 
 {% block content %}
-<div class="container mt-5 d-flex justify-content-center">
-  <div class="card shadow p-4" style="max-width: 400px; width: 100%;">
-    <div class="text-center mb-3">
-      <h3>🔐 Iniciar Sesión</h3>
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+  <div class="card shadow-lg p-4 border-0" style="max-width: 420px; width: 100%; border-radius: 16px;">
+    <div class="text-center mb-4">
+      <h3 class="fw-bold text-primary">🔐 Iniciar Sesión</h3>
       <p class="text-muted mb-0">Sistema de Préstamos</p>
     </div>
 
-    <form action="{{ url_for('login') }}" method="POST">
+    <!-- Formulario de Login -->
+    <form action="{{ url_for('rutas.login') }}" method="POST" autocomplete="off">
       <div class="mb-3">
-        <label for="usuario" class="form-label">Usuario</label>
-        <input type="text" name="usuario" id="usuario" class="form-control" required autofocus>
+        <label for="usuario" class="form-label fw-semibold">Usuario</label>
+        <input type="text" name="usuario" id="usuario" class="form-control form-control-lg" placeholder="Tu usuario" required autofocus>
       </div>
 
-      <div class="mb-3">
-        <label for="clave" class="form-label">Contraseña</label>
-        <input type="password" name="clave" id="clave" class="form-control" required>
+      <div class="mb-4">
+        <label for="clave" class="form-label fw-semibold">Contraseña</label>
+        <input type="password" name="clave" id="clave" class="form-control form-control-lg" placeholder="••••••••" required>
       </div>
 
-      <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+      <button type="submit" class="btn btn-primary w-100 btn-lg fw-bold shadow-sm">
+        Ingresar
+      </button>
     </form>
 
-    <div class="text-center mt-3 text-muted">
-      <small>Versión 1.0 — Desarrollado por Manuel Herrera</small>
+    <!-- Pie -->
+    <div class="text-center mt-4 text-muted small">
+      <p class="mb-0">Versión 1.0 — Desarrollado por <strong>Manuel Herrera</strong></p>
     </div>
   </div>
 </div>
+
+<style>
+  body {
+    background: linear-gradient(135deg, #f0f4ff, #e6ebff);
+  }
+  .card {
+    background-color: #ffffff;
+  }
+  .btn-primary {
+    background-color: #0d6efd;
+    border: none;
+    transition: background-color 0.2s ease-in-out;
+  }
+  .btn-primary:hover {
+    background-color: #0b5ed7;
+  }
+</style>
 {% endblock %}

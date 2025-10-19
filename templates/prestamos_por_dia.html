@@ -1,33 +1,72 @@
 {% extends "base.html" %}
 {% block title %}Préstamos del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-  <h3>🏦 Préstamos del {{ fecha.strftime("%d/%m/%Y") }}</h3>
+
+  <!-- 🏦 Encabezado -->
+  <div class="card shadow-sm mb-4 border-0">
+    <div class="card-body text-center">
+      <h4 class="card-title mb-2">🏦 Préstamos del {{ fecha.strftime("%d/%m/%Y") }}</h4>
+      <p class="text-muted mb-0">
+        Listado de todos los préstamos otorgados a clientes activos en la fecha seleccionada.
+      </p>
+    </div>
+  </div>
+
+  <!-- 📋 Tabla de préstamos -->
   {% if prestamos %}
-  <table class="table table-striped text-center">
-    <thead class="table-dark">
-      <tr>
-        <th>Cliente</th>
-        <th>Monto</th>
-        <th>Fecha y Hora</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in prestamos %}
-      <tr>
-        <td>{{ p.nombre }}</td>
-        <td>${{ "%.2f"|format(p.monto) }}</td>
-        <td>{{ p.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="alert alert-primary text-center mt-3">
-    <strong>Total Préstamos:</strong> ${{ "%.2f"|format(total_prestamos) }}
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Cliente</th>
+          <th>Monto</th>
+          <th>Fecha y Hora</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in prestamos %}
+        <tr>
+          <td class="fw-semibold">{{ p.nombre }}</td>
+          <td>${{ "%.2f"|format(p.monto) }}</td>
+          <td>{{ p.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td class="text-end" colspan="2">Total Préstamos</td>
+          <td>${{ "%.2f"|format(total_prestamos) }}</td>
+        </tr>
+      </tfoot>
+    </table>
   </div>
   {% else %}
-  <div class="alert alert-info text-center mt-3">No se registraron préstamos en esta fecha.</div>
+  <!-- 🟦 Si no hay préstamos -->
+  <div class="alert alert-info text-center mt-3 shadow-sm">
+    <h6 class="mb-0">📭 No se registraron préstamos activos en esta fecha.</h6>
+  </div>
   {% endif %}
-  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">⬅ Volver a Liquidación</a>
+
+  <!-- 🔙 Botón volver -->
+  <div class="text-center mt-4">
+    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary rounded-pill shadow-sm">
+      ⬅️ Volver a Liquidación
+    </a>
+  </div>
 </div>
+
+<!-- 🎨 Estilos -->
+<style>
+  .table td, .table th {
+    vertical-align: middle;
+  }
+  .card {
+    border-radius: 12px;
+  }
+  tfoot td {
+    font-weight: 600;
+  }
+</style>
 {% endblock %}

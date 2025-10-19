@@ -6,9 +6,9 @@
 
 <!-- Botones principales -->
 <div class="mb-3 d-flex flex-wrap gap-2">
-  <a class="btn btn-primary" href="{{ url_for('nuevo_cliente') }}">➕ Nuevo Cliente</a>
-  <a class="btn btn-secondary" href="{{ url_for('liquidacion') }}">📊 Ver Liquidación</a>
-  <a class="btn btn-outline-dark" href="{{ url_for('clientes_cancelados_view') }}">🚫 Cancelados</a>
+  <a class="btn btn-primary" href="{{ url_for('rutas.nuevo_cliente') }}">➕ Nuevo Cliente</a>
+  <a class="btn btn-secondary" href="{{ url_for('rutas.liquidacion_view') }}">📊 Ver Liquidación</a>
+  <a class="btn btn-outline-dark" href="{{ url_for('rutas.clientes_cancelados_view') }}">🚫 Cancelados</a>
 </div>
 
 <!-- Fecha y totales -->
@@ -26,9 +26,13 @@
       <th>Código</th>
       <th>Fecha</th>
       <th>Nombre</th>
-      <th>Monto Prestado</th>
+      <th>Venta</th>
+      <th>Cuota</th>
+      <th>Cuotas Atrasadas</th>
+      <th>Último Abono</th>
       <th>Abonar</th>
       <th>Saldo</th>
+      <th>Editar</th>
       <th>Eliminar</th>
     </tr>
   </thead>
@@ -39,22 +43,42 @@
       
       <!-- Orden -->
       <td style="width:100px;">
-        <form action="{{ url_for('actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
+        <form action="{{ url_for('rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
           <input type="number" name="orden" value="{{ c.orden }}" class="form-control text-center" style="width:70px;"
                  {% if c.cancelado %}disabled{% endif %}>
           <button type="submit" class="btn btn-outline-primary ms-1 btn-sm" {% if c.cancelado %}disabled{% endif %}>✔</button>
         </form>
       </td>
 
+      <!-- Datos principales -->
       <td>{{ c.codigo }}</td>
       <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
       <td>{{ c.nombre }}</td>
-      <td>{{ "%.2f"|format(c.capital_total()) }}</td>
 
-      <!-- Abono -->
+      <!-- Venta -->
+      <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
+
+      <!-- Cuota -->
+      <td>
+        {{ "%.2f"|format(c.valor_cuota()) }}
+        {% if c.prestamos %}
+          {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
+          {% if u.frecuencia %}
+            <small class="text-muted">({{ u.frecuencia }})</small>
+          {% endif %}
+        {% endif %}
+      </td>
+
+      <!-- Cuotas atrasadas (solo número, sin color extra) -->
+      <td>{{ c.cuotas_atrasadas() }}</td>
+
+      <!-- Último Abono -->
+      <td>{{ "%.2f"|format(c.ultimo_abono_monto()) }}</td>
+
+      <!-- Abonar -->
       <td class="abono-td">
         {% if not c.cancelado %}
-        <form action="{{ url_for('registrar_abono_por_codigo') }}" 
+        <form action="{{ url_for('rutas.registrar_abono_por_codigo') }}" 
               method="post" 
               class="d-flex justify-content-center form-abono"
               data-orden="{{ c.orden }}">
@@ -81,9 +105,18 @@
         {% endif %}
       </td>
 
+      <!-- Editar préstamo -->
+      <td>
+        <button class="btn btn-outline-primary btn-sm editar-btn" 
+                data-id="{{ c.id }}" 
+                data-nombre="{{ c.nombre }}">
+          ✏️
+        </button>
+      </td>
+
       <!-- Eliminar cliente -->
       <td>
-        <form action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}" method="post"
+        <form action="{{ url_for('rutas.eliminar_cliente', cliente_id=c.id) }}" method="post"
               onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
           <button type="submit" class="btn btn-danger btn-sm">❌</button>
         </form>
@@ -95,6 +128,43 @@
 {% else %}
 <div class="alert alert-info">No hay clientes registrados aún.</div>
 {% endif %}
+
+<!-- ================== MODAL EDITAR PRÉSTAMO ================== -->
+<div class="modal fade" id="modalEditarPrestamo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formEditarPrestamo" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar Préstamo de <span id="clienteNombre"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Plazo (días)</label>
+            <input type="number" name="plazo" id="editarPlazo" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Interés (%)</label>
+            <input type="number" step="0.01" name="interes" id="editarInteres" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Frecuencia</label>
+            <select name="frecuencia" id="editarFrecuencia" class="form-select">
+              <option value="diario">Diario</option>
+              <option value="semanal">Semanal</option>
+              <option value="quincenal">Quincenal</option>
+              <option value="mensual">Mensual</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- ================== MODAL HISTORIAL ================== -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
@@ -127,171 +197,52 @@
 <!-- ================== SCRIPTS ================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+  const modalEditar = new bootstrap.Modal(document.getElementById("modalEditarPrestamo"));
+  const formEditar = document.getElementById("formEditarPrestamo");
 
-  // --- Historial de abonos ---
-  document.querySelectorAll('.saldo-clickable').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const clienteId = btn.dataset.clienteId;
-      try {
-        const response = await fetch(`/historial_abonos/${clienteId}`);
-        const data = await response.json();
-        const tbody = document.getElementById("tablaHistorialBody");
+  document.querySelectorAll(".editar-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const nombre = btn.dataset.nombre;
+      document.getElementById("clienteNombre").textContent = nombre;
 
-        if (data.abonos.length > 0) {
-          tbody.innerHTML = data.abonos.map(a => `
-            <tr>
-              <td>${a.fecha}</td>
-              <td>${a.hora || ""}</td>
-              <td>${a.nombre || ""}</td>
-              <td>$${a.monto.toFixed(2)}</td>
-              <td>
-                <button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}">🗑️</button>
-              </td>
-            </tr>
-          `).join("");
-        } else {
-          tbody.innerHTML = `<tr><td colspan="5"><em>No hay abonos registrados</em></td></tr>`;
-        }
-
-        // ✅ Eliminación de abonos con actualización en vivo
-        document.querySelectorAll('.eliminar-abono').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            if (!confirm('¿Seguro que deseas eliminar este abono?')) return;
-            const id = btn.dataset.id;
-            try {
-              const res = await fetch(`/eliminar_abono/${id}`, { 
-                method: 'POST', 
-                headers: { 'X-Requested-With': 'fetch' } 
-              });
-              if (!res.ok) return alert('Error al eliminar el abono.');
-
-              const data = await res.json();
-              btn.closest('tr').remove();
-
-              // 💲 Actualizar saldo en tiempo real
-              const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${data.cliente_id}"]`);
-              if (saldoElem) {
-                saldoElem.textContent = data.saldo.toFixed(2);
-                saldoElem.style.transition = "background-color 0.6s";
-                saldoElem.style.backgroundColor = data.saldo > 0 ? "rgba(0,255,0,0.2)" : "rgba(255,0,0,0.2)";
-                setTimeout(() => saldoElem.style.backgroundColor = "", 800);
-              }
-
-              // 🔁 Si vuelve a estar activo, quitar opacidad
-              const fila = saldoElem ? saldoElem.closest("tr") : null;
-              if (fila && data.saldo > 0) fila.style.opacity = "1";
-
-            } catch (err) {
-              console.error(err);
-              alert("Error de conexión al eliminar abono.");
-            }
-          });
-        });
-
-        new bootstrap.Modal(document.getElementById('modalHistorial')).show();
-      } catch (err) {
-        console.error(err);
-        alert("Error al cargar historial.");
+      const res = await fetch(`/editar_prestamo/${id}`);
+      const data = await res.json();
+      if (!data.ok) {
+        alert(data.error || "Error al cargar datos del préstamo.");
+        return;
       }
+
+      document.getElementById("editarPlazo").value = data.data.plazo || "";
+      document.getElementById("editarInteres").value = data.data.interes || "";
+      document.getElementById("editarFrecuencia").value = data.data.frecuencia || "diario";
+      formEditar.dataset.id = id;
+      modalEditar.show();
     });
   });
 
-  // --- ✅ Registro de abonos rápido, actualiza saldo automáticamente ---
-  const forms = document.querySelectorAll('.form-abono');
+  formEditar.addEventListener("submit", async e => {
+    e.preventDefault();
+    const id = formEditar.dataset.id;
+    const formData = new FormData(formEditar);
+    const res = await fetch(`/editar_prestamo/${id}`, { method: "POST", body: formData });
+    const data = await res.json();
 
-  function playSound(success = true) {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = success ? 'triangle' : 'sawtooth';
-      osc.frequency.setValueAtTime(success ? 880 : 220, ctx.currentTime);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.15);
-    } catch {}
-  }
-
-  const hoy = new Date().toISOString().slice(0, 10);
-  forms.forEach(form => {
-    const codigoCliente = form.querySelector('input[name="codigo"]').value;
-    const fechaGuardada = localStorage.getItem(`abonado_${codigoCliente}`);
-    const input = form.querySelector('input[name="monto"]');
-    if (fechaGuardada === hoy) input.classList.add('bg-success', 'text-white');
-  });
-
-  forms.forEach((form) => {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = form.querySelector('input[name="monto"]');
-      const formData = new FormData(form);
-      try {
-        const res = await fetch(form.action, {
-          method: 'POST',
-          body: formData,
-          headers: { 'X-Requested-With': 'fetch' }
-        });
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          playSound(false);
-          alert(data.error || "❌ Error al registrar el abono.");
-          return;
-        }
-
-        const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${data.cliente_id}"]`);
-        if (saldoElem) {
-          saldoElem.textContent = data.saldo.toFixed(2);
-          saldoElem.style.transition = "background-color 0.6s";
-          saldoElem.style.backgroundColor = data.cancelado ? "rgba(255,0,0,0.2)" : "rgba(0,255,0,0.2)";
-          setTimeout(() => saldoElem.style.backgroundColor = "", 800);
-        }
-
-        playSound(true);
-        input.classList.add('bg-success', 'text-white');
-        input.value = '';
-        const codigoCliente = form.querySelector('input[name="codigo"]').value;
-        localStorage.setItem(`abonado_${codigoCliente}`, hoy);
-
-        const fila = form.closest('tr');
-        if (fila) {
-          fila.classList.add('fila-parpadea');
-          setTimeout(() => fila.classList.remove('fila-parpadea'), 1200);
-        }
-
-        const ordenActual = parseInt(form.dataset.orden);
-        const siguiente = document.querySelector(`.form-abono[data-orden="${ordenActual + 1}"]`);
-        if (siguiente) siguiente.querySelector('input[name="monto"]').focus();
-        else forms[0].querySelector('input[name="monto"]').focus();
-      } catch (error) {
-        playSound(false);
-        console.error(error);
-        alert("Error de conexión al registrar abono.");
-      }
-    });
+    if (data.ok) {
+      alert("✅ " + data.msg);
+      modalEditar.hide();
+      location.reload();
+    } else {
+      alert("❌ " + (data.error || "Error al guardar los cambios."));
+    }
   });
 });
-
-// 🕛 Limpieza automática localStorage
-(function limpiarAbonosViejos() {
-  const hoy = new Date().toISOString().slice(0, 10);
-  Object.keys(localStorage).forEach(k => {
-    if (k.startsWith("abonado_") && localStorage.getItem(k) !== hoy) localStorage.removeItem(k);
-  });
-})();
 </script>
 
 <style>
 .cancelado { background-color: #f8d7da; color: #721c24; }
 .plazo-vencido { background-color: rgba(255,165,0,0.15)!important; }
 .plazo-moroso { background-color: rgba(255,0,0,0.15)!important; }
-@keyframes parpadeoVerde {
-  0% { background-color: #d4edda; }
-  50% { background-color: #b6e0c3; }
-  100% { background-color: transparent; }
-}
-.fila-parpadea { animation: parpadeoVerde 1s ease-out; }
 .abono-td form{align-items:center;justify-content:center;gap:0.3em;}
 .saldo-clickable{font-size:1em;font-weight:bold;color:#0d6efd;text-decoration:underline;}
 </style>

@@ -1,11 +1,13 @@
+
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<h2>Dashboard</h2>
-<div class="row g-3">
+<h2 class="mb-4 text-center">📊 Dashboard General</h2>
+<div class="row g-3 justify-content-center">
+
   <!-- Total Clientes -->
   <div class="col-md-3">
-    <div class="card p-3 text-center">
+    <div class="card p-3 text-center shadow-sm rounded">
       <h5>Total Clientes</h5>
       <h3>{{ total_clientes }}</h3>
     </div>
@@ -13,7 +15,7 @@
 
   <!-- Total Abonos -->
   <div class="col-md-3">
-    <div class="card p-3 text-center">
+    <div class="card p-3 text-center shadow-sm rounded">
       <h5>Total Abonos</h5>
       <h3>{{ "%.2f"|format(total_abonos) }}</h3>
     </div>
@@ -21,23 +23,23 @@
 
   <!-- Total Préstamos -->
   <div class="col-md-3">
-    <div class="card p-3 text-center">
+    <div class="card p-3 text-center shadow-sm rounded">
       <h5>Total Préstamos</h5>
       <h3>{{ "%.2f"|format(total_prestamos) }}</h3>
     </div>
   </div>
 
-  <!-- Total Productos Registrados -->
+  <!-- Total Productos -->
   <div class="col-md-3">
-    <div class="card p-3 text-center">
+    <div class="card p-3 text-center shadow-sm rounded">
       <h5>Total Productos</h5>
       <h3>{{ total_productos }}</h3>
     </div>
   </div>
 
-  <!-- Total Productos Vendidos -->
+  <!-- Total Unidades Vendidas -->
   <div class="col-md-3">
-    <div class="card p-3 text-center">
+    <div class="card p-3 text-center shadow-sm rounded">
       <h5>Total Unidades Vendidas</h5>
       <h3>{{ total_unidades_vendidas }}</h3>
     </div>
@@ -45,10 +47,15 @@
 
   <!-- Valor Total Vendido -->
   <div class="col-md-3">
-    <div class="card p-3 text-center">
+    <div class="card p-3 text-center shadow-sm rounded">
       <h5>Valor Total Vendido</h5>
       <h3>{{ "%.2f"|format(valor_total_vendido) }}</h3>
     </div>
   </div>
 </div>
+
+<style>
+  .card h3 { font-weight: bold; color: #0d6efd; }
+  .card h5 { color: #444; }
+</style>
 {% endblock %}

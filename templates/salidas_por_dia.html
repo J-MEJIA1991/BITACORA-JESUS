@@ -1,33 +1,69 @@
+
 {% extends "base.html" %}
 {% block title %}Salidas del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-  <h3>💸 Salidas del {{ fecha.strftime("%d/%m/%Y") }}</h3>
+  <!-- Encabezado -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body text-center">
+      <h4 class="card-title mb-2">💸 Salidas del {{ fecha.strftime("%d/%m/%Y") }}</h4>
+      <p class="text-muted mb-0">Movimientos de dinero saliente registrados en la fecha seleccionada.</p>
+    </div>
+  </div>
+
+  <!-- Tabla de salidas -->
   {% if salidas %}
-  <table class="table table-striped text-center">
-    <thead class="table-dark">
-      <tr>
-        <th>Monto</th>
-        <th>Descripción</th>
-        <th>Fecha y Hora</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in salidas %}
-      <tr>
-        <td>${{ "%.2f"|format(s.monto) }}</td>
-        <td>{{ s.descripcion or 'Sin descripción' }}</td>
-        <td>{{ s.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="alert alert-warning text-center mt-3">
-    <strong>Total Salidas:</strong> ${{ "%.2f"|format(total_salidas) }}
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Monto</th>
+          <th>Descripción</th>
+          <th>Fecha y Hora</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in salidas %}
+        <tr>
+          <td>${{ "%.2f"|format(s.monto) }}</td>
+          <td>{{ s.descripcion or 'Sin descripción' }}</td>
+          <td>{{ s.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="2" class="text-end">Total Salidas</td>
+          <td>${{ "%.2f"|format(total_salidas) }}</td>
+        </tr>
+      </tfoot>
+    </table>
   </div>
   {% else %}
-  <div class="alert alert-info text-center mt-3">No se registraron salidas en esta fecha.</div>
+  <div class="alert alert-info text-center mt-3">
+    No se registraron salidas en esta fecha.
+  </div>
   {% endif %}
-  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">⬅ Volver a Liquidación</a>
+
+  <!-- Botón volver -->
+  <div class="text-center mt-4">
+    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary">
+      ⬅️ Volver a Liquidación
+    </a>
+  </div>
 </div>
+
+<!-- 🎨 Estilos -->
+<style>
+  .table td, .table th {
+    vertical-align: middle;
+  }
+  .card {
+    border-radius: 12px;
+  }
+  tfoot td {
+    font-weight: 600;
+  }
+</style>
 {% endblock %}

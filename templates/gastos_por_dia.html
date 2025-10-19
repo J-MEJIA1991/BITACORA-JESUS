@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}Gastos del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
 {% block content %}
@@ -28,6 +29,7 @@
   {% else %}
   <div class="alert alert-info text-center mt-3">No se registraron gastos en esta fecha.</div>
   {% endif %}
-  <a href="{{ url_for('liquidacion') }}" class="btn btn-secondary mt-3">⬅ Volver a Liquidación</a>
+  
+  <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary mt-3">⬅ Volver a Liquidación</a>
 </div>
 {% endblock %}

@@ -1,16 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Inicio{% endblock %}
 {% block content %}
-<h2>Inicio - Resumen</h2>
-<p>Resumen rápido de clientes (mismo listado que en Index).</p>
-<table class="table table-sm table-bordered">
-  <thead>
-    <tr><th>Código</th><th>Nombre</th><th>Saldo</th></tr>
-  </thead>
-  <tbody>
-    {% for c in clientes %}
-    <tr><td>{{ c.codigo }}</td><td>{{ c.nombre }}</td><td>{{ "%.2f"|format(c.saldo) }}</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="container mt-4">
+  <h2 class="mb-3 text-center">🏠 Inicio - Resumen General</h2>
+  <p class="text-center text-muted">Resumen rápido de clientes (mismo listado que en la página principal).</p>
+
+  {% if clientes %}
+  <table class="table table-sm table-bordered table-hover text-center align-middle shadow-sm">
+    <thead class="table-dark">
+      <tr>
+        <th>Código</th>
+        <th>Nombre</th>
+        <th>Saldo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr>
+        <td>{{ c.codigo }}</td>
+        <td>{{ c.nombre }}</td>
+        <td>${{ "%.2f"|format(c.saldo) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-info text-center mt-3">
+    No hay clientes registrados todavía.
+  </div>
+  {% endif %}
+
+  <div class="text-center mt-4">
+    <a href="{{ url_for('rutas.index') }}" class="btn btn-primary">📋 Ver Listado Completo</a>
+  </div>
+</div>
+
+<style>
+  .table td, .table th { vertical-align: middle; }
+  h2 { color: #0d6efd; }
+</style>
 {% endblock %}

@@ -1,6 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Lodging{% endblock %}
+
 {% block content %}
-<h2>Lodging</h2>
-<p>Plantilla de lodging (placeholder). Si la usas con datos, puedo adaptarla para mostrar listados o formularios.</p>
+<div class="container mt-4">
+  <h2 class="mb-3 text-center text-primary">🏨 Lodging</h2>
+  <p class="text-center text-muted">
+    Esta es una plantilla de <strong>lodging</strong> (placeholder).  
+    Si la usas con datos, puedo adaptarla para mostrar listados, formularios o reportes según necesites.
+  </p>
+
+  <div class="alert alert-info text-center mt-4 shadow-sm">
+    <strong>💡 Consejo:</strong> Puedes usar esta vista para registrar hospedajes, habitaciones o rentas temporales.
+  </div>
+
+  <div class="text-center mt-4">
+    <a href="{{ url_for('rutas.index') }}" class="btn btn-secondary">⬅ Volver al Inicio</a>
+  </div>
+</div>
+
+<style>
+  .alert {
+    border-radius: 12px;
+    font-size: 1rem;
+  }
+</style>
 {% endblock %}
