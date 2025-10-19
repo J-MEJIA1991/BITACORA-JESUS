@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}Clientes Cancelados{% endblock %}
 
@@ -7,7 +6,8 @@
   <h2 class="mb-4">🚫 Clientes Cancelados</h2>
 
   <div class="mb-3">
-    <a href="{{ url_for('index') }}" class="btn btn-secondary">⬅️ Volver al listado</a>
+    <!-- 🔹 Corregido: se agrega el prefijo 'rutas.' -->
+    <a href="{{ url_for('rutas.index') }}" class="btn btn-secondary">⬅️ Volver al listado</a>
   </div>
 
   {% if clientes %}
@@ -33,7 +33,8 @@
         <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
         <td>${{ "%.2f"|format(c.saldo_total()) }}</td>
         <td>
-          <form action="{{ url_for('reactivar_cliente', cliente_id=c.id) }}" method="post"
+          <!-- 🔹 También corregido con el prefijo del blueprint -->
+          <form action="{{ url_for('rutas.reactivar_cliente', cliente_id=c.id) }}" method="post"
                 onsubmit="return confirm('¿Deseas reactivar este cliente?');">
             <button type="submit" class="btn btn-success btn-sm">🔄 Reactivar</button>
           </form>
