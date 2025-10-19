@@ -85,7 +85,7 @@ def editar_prestamo(cliente_id):
     cliente = Cliente.query.get_or_404(cliente_id)
     prestamo = max(cliente.prestamos, key=lambda p: p.fecha) if cliente.prestamos else None
 
-    # 📤 --- GET: devolver datos en formato JSON ---
+    # 📤 --- GET: devolver datos actuales ---
     if request.method == "GET":
         if not prestamo:
             return jsonify({"ok": False, "error": "El cliente no tiene préstamo activo."})
@@ -99,24 +99,30 @@ def editar_prestamo(cliente_id):
             }
         })
 
-    # 📥 --- POST: guardar cambios del préstamo ---
+    # 📥 --- POST: actualizar sin duplicar el préstamo ---
     try:
         if not prestamo:
             return jsonify({"ok": False, "error": "No hay préstamo asociado a este cliente."})
 
-        monto = float(request.form.get("monto", prestamo.monto))
-        interes = float(request.form.get("interes", prestamo.interes))
-        plazo = int(request.form.get("plazo", prestamo.plazo))
-        frecuencia = request.form.get("frecuencia", prestamo.frecuencia)
+        nuevo_monto = float(request.form.get("monto", prestamo.monto))
+        nuevo_interes = float(request.form.get("interes", prestamo.interes))
+        nuevo_plazo = int(request.form.get("plazo", prestamo.plazo))
+        nueva_frecuencia = request.form.get("frecuencia", prestamo.frecuencia)
 
-        prestamo.monto = monto
-        prestamo.interes = interes
-        prestamo.plazo = plazo
-        prestamo.frecuencia = frecuencia
-        prestamo.saldo = monto + (monto * interes / 100)
+        # ⚙️ Actualizar valores sin alterar caja ni saldo total
+        prestamo.monto = nuevo_monto
+        prestamo.interes = nuevo_interes
+        prestamo.plazo = nuevo_plazo
+        prestamo.frecuencia = nueva_frecuencia
+
+        # ✅ Mantener el saldo actual si ya tiene abonos
+        # Solo recalcular si el préstamo estaba sin abonos
+        if not prestamo.abonos or len(prestamo.abonos) == 0:
+            prestamo.saldo = nuevo_monto + (nuevo_monto * nuevo_interes / 100)
+        # En caso contrario, el saldo existente permanece sin cambios
+
         db.session.commit()
-
-        return jsonify({"ok": True, "msg": "Préstamo actualizado correctamente."})
+        return jsonify({"ok": True, "msg": "Préstamo actualizado correctamente (sin duplicar saldo)."})
     except Exception as e:
         db.session.rollback()
         return jsonify({"ok": False, "error": str(e)})
