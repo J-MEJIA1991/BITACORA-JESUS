@@ -26,8 +26,8 @@ bp = Blueprint("rutas", __name__)
 # -----------------------------------
 # Login / Auth
 # -----------------------------------
-VALID_USER = os.getenv("APP_USER", "mjesus40")
-VALID_PASS = os.getenv("APP_PASS", "198409")
+VALID_USER = os.getenv("APP_USER", "j-mejia")
+VALID_PASS = os.getenv("APP_PASS", "honny")
 
 def login_required(f):
     @wraps(f)
