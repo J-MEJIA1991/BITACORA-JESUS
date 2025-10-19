@@ -16,9 +16,7 @@ app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
 # 🗄️ CONFIGURACIÓN DE BASE DE DATOS (Neon PostgreSQL)
 # -------------------------------------------------
 DB_DEFAULT = (
-    "postgresql+psycopg2://neondb_owner:"
-    "npg_cvzpsy7uDj5A@ep-holy-cherry-ad45d0mv-pooler.c-2.us-east-1.aws.neon.tech/"
-    "neondb?sslmode=require&channel_binding=require"
+    "postgresql://neondb_owner:npg_Jom4Ed6OAMLh@ep-frosty-snow-adg8fr51-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
 DATABASE_URL = os.getenv("DATABASE_URL", DB_DEFAULT)
 
@@ -38,8 +36,8 @@ migrate = Migrate(app, db)
 # -------------------------------------------------
 # 🔐 LOGIN Y SESIÓN
 # -------------------------------------------------
-VALID_USER = "mjesus40"
-VALID_PASS = "198409"
+VALID_USER = "j-mejia"
+VALID_PASS = "honny"
 
 def login_required(f):
     """Decorador para proteger las rutas que requieren sesión activa."""
