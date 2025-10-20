@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}Inicio{% endblock %}
 
@@ -248,7 +247,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Registrar abonos en vivo ---
   const forms = document.querySelectorAll(".form-abono");
-  const hoy = new Date().toISOString().slice(0, 10);
   forms.forEach(form => {
     form.addEventListener("submit", async e => {
       e.preventDefault();
@@ -268,9 +266,6 @@ document.addEventListener("DOMContentLoaded", () => {
           saldoElem.style.backgroundColor = "rgba(0,255,0,0.2)";
           setTimeout(() => saldoElem.style.backgroundColor = "", 800);
         }
-        const actual = parseInt(form.dataset.orden);
-        const siguiente = document.querySelector(`.form-abono[data-orden="${actual + 1}"]`);
-        (siguiente || forms[0]).querySelector("input[name='monto']").focus();
       } catch (err) { playSound(false); alert("Error al conectar."); }
     });
   });
@@ -290,10 +285,57 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!data.ok) return alert("Error al obtener historial.");
         const p = data.prestamo;
         datos.innerHTML = `<tr><td>${p.nombre}</td><td>${p.fecha_inicial}</td><td>$${p.monto.toFixed(2)}</td><td>$${p.total.toFixed(2)}</td><td>$${p.cuota.toFixed(2)}</td><td>${p.modo}</td><td>${p.datos}</td><td>$${p.saldo.toFixed(2)}</td></tr>`;
-        tbody.innerHTML = data.abonos.map(a => `<tr><td>${a.codigo}</td><td>${a.fecha}</td><td>${a.hora}</td><td>$${a.monto.toFixed(2)}</td><td>$${a.saldo.toFixed(2)}</td><td>${a.id>0?`<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${id}">🗑️</button>`:"<span>—</span>"}</td></tr>`).join("");
+        tbody.innerHTML = data.abonos.map(a => 
+          `<tr>
+            <td>${a.codigo}</td>
+            <td>${a.fecha}</td>
+            <td>${a.hora}</td>
+            <td>$${a.monto.toFixed(2)}</td>
+            <td>$${a.saldo.toFixed(2)}</td>
+            <td>${a.id>0?`<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${id}">🗑️</button>`:"<span>—</span>"}</td>
+          </tr>`
+        ).join("");
         modal.show();
       } catch { alert("Error al cargar historial."); }
     });
+  });
+
+  // --- Eliminar abono ---
+  document.addEventListener("click", async (e) => {
+    if (e.target.classList.contains("eliminar-abono")) {
+      const id = e.target.dataset.id;
+      const clienteId = e.target.dataset.cliente;
+      if (!confirm("¿Seguro que deseas eliminar este abono?")) return;
+      try {
+        const res = await fetch(`/eliminar_abono/${id}`, {
+          method: "POST",
+          headers: { "X-Requested-With": "fetch" }
+        });
+        const data = await res.json();
+
+        if (!data.ok) {
+          alert("❌ " + (data.error || "No se pudo eliminar."));
+          return;
+        }
+
+        const fila = e.target.closest("tr");
+        if (fila) fila.remove();
+
+        const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${clienteId}"]`);
+        if (saldoElem) {
+          saldoElem.textContent = data.saldo.toFixed(2);
+          saldoElem.style.transition = "background-color 0.6s";
+          saldoElem.style.backgroundColor = "rgba(255, 0, 0, 0.15)";
+          setTimeout(() => saldoElem.style.backgroundColor = "", 800);
+        }
+
+        playSound(true);
+        alert("🗑️ Abono eliminado correctamente.");
+      } catch (err) {
+        playSound(false);
+        alert("Error de conexión al eliminar abono.");
+      }
+    }
   });
 });
 </script>
