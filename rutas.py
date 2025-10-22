@@ -438,7 +438,7 @@ def eliminar_cliente(cliente_id):
             tipo="entrada_manual",
             monto=saldo_restante,
             descripcion=f"Reintegro único de cliente {cliente.nombre}",
-            fecha=hora_para_guardar(),  # ✅ UTC seguro
+            fecha=hora_actual(),  # ✅ UTC seguro
         )
         db.session.add(mov_reverso)
 
@@ -483,7 +483,7 @@ def otorgar_prestamo(cliente_id):
         tipo="salida",
         monto=monto,
         descripcion=f"Préstamo a {cliente.nombre}",
-        fecha=hora_para_guardar(),  # ✅ hora real convertida a UTC
+        fecha=hora_actual(),  # ✅ hora real convertida a UTC
     )
     db.session.add(mov)
     db.session.commit()
@@ -674,7 +674,7 @@ def abonar(cliente_id):
     nuevo_abono = Abono(
         prestamo_id=prestamo.id,
         monto=monto_abono,
-        fecha=hora_para_guardar(),  # ✅ corrige desfase de hora
+        fecha=hora_actual(),  # ✅ corrige desfase de hora
     )
     db.session.add(nuevo_abono)
 
@@ -819,7 +819,7 @@ def caja_gasto():
             tipo="gasto",
             monto=monto,
             descripcion=descripcion or "Gasto general",
-            fecha=hora_para_guardar(),  # ✅ hora real Chile (UTC)
+            fecha=hora_actual(),  # ✅ hora real Chile (UTC)
         )
         db.session.add(mov)
         db.session.commit()
