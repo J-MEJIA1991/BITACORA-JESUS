@@ -48,8 +48,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # ======================================================
 # 🔐 LOGIN Y SESIÓN
 # ======================================================
-app.config["VALID_USER"] = "mjesus40"
-app.config["VALID_PASS"] = "198409"
+app.config["VALID_USER"] = "j-mejia"
+app.config["VALID_PASS"] = "honny"
 
 def login_required(f):
     """Decorador para proteger rutas que requieren sesión activa."""
