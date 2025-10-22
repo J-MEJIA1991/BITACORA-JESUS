@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}{{ titulo }}{% endblock %}
 
@@ -9,6 +8,7 @@
     <div class="card-body text-center">
       <h4 class="card-title mb-2">{{ titulo }}</h4>
       <h6 class="text-muted">📅 Fecha: {{ fecha.strftime("%d/%m/%Y") }}</h6>
+      <p class="text-muted mb-0">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
     </div>
   </div>
 
@@ -56,7 +56,7 @@
 
   <!-- Botón volver -->
   <div class="text-center mt-4">
-    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary">⬅️ Volver a Liquidación</a>
+    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-secondary">⬅️ Volver a Liquidación</a>
   </div>
 </div>
 

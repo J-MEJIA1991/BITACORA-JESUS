@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}Salidas del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
 
@@ -9,6 +8,7 @@
     <div class="card-body text-center">
       <h4 class="card-title mb-2">💸 Salidas del {{ fecha.strftime("%d/%m/%Y") }}</h4>
       <p class="text-muted mb-0">Movimientos de dinero saliente registrados en la fecha seleccionada.</p>
+      <p class="text-muted mt-1">🕒 Hora actual en Chile: {{ hora_chile() }}</p>
     </div>
   </div>
 
@@ -48,7 +48,7 @@
 
   <!-- Botón volver -->
   <div class="text-center mt-4">
-    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary">
+    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-secondary">
       ⬅️ Volver a Liquidación
     </a>
   </div>

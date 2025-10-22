@@ -11,6 +11,7 @@
       <p class="text-muted mb-0">
         Listado de todos los préstamos otorgados a clientes activos en la fecha seleccionada.
       </p>
+      <p class="text-muted mt-1">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
     </div>
   </div>
 
@@ -51,7 +52,7 @@
 
   <!-- 🔙 Botón volver -->
   <div class="text-center mt-4">
-    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary rounded-pill shadow-sm">
+    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-secondary rounded-pill shadow-sm">
       ⬅️ Volver a Liquidación
     </a>
   </div>

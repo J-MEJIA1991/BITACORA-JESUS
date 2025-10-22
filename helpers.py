@@ -1,18 +1,15 @@
-from datetime import datetime, date, time, timedelta
+# ======================================================
+# helpers.py — versión FINAL (Créditos System, hora Chile 🇨🇱)
+# ======================================================
+
+from datetime import date, datetime, time, timedelta
 import random
 from sqlalchemy import func
 from extensions import db
 from modelos import Cliente, Prestamo, Abono, MovimientoCaja, Liquidacion
 
-# ---------------------------------------------------
-# 🔹 Funciones de utilidades de tiempo
-# ---------------------------------------------------
-def day_range(fecha: date):
-    """Devuelve el inicio y fin del día (datetime) para una fecha dada."""
-    start = datetime.combine(fecha, time.min)
-    end = start + timedelta(days=1)
-    return start, end
-
+# ⏰ Importar funciones de hora local
+from tiempo import hora_actual, local_date, day_range
 
 # ---------------------------------------------------
 # 🔹 Generar códigos únicos
@@ -28,7 +25,7 @@ def generar_codigo_cliente():
 # ---------------------------------------------------
 # 🔹 Crear o buscar liquidación existente
 # ---------------------------------------------------
-def crear_liquidacion_para_fecha(fecha):
+def crear_liquidacion_para_fecha(fecha: date):
     """Crea la liquidación para una fecha si no existe."""
     liq = Liquidacion.query.filter_by(fecha=fecha).first()
     if not liq:
@@ -42,40 +39,46 @@ def crear_liquidacion_para_fecha(fecha):
 # 🔹 Obtener totales generales
 # ---------------------------------------------------
 def obtener_resumen_total():
-    """Calcula los totales de caja y cartera general."""
-    total_entradas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'entrada_manual').scalar() or 0.0
+    """Calcula los totales generales de caja y cartera."""
+    total_entradas = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(MovimientoCaja.tipo == 'entrada_manual')
+        .scalar() or 0.0
+    )
 
-    total_salidas = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'salida').scalar() or 0.0
+    total_salidas = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(MovimientoCaja.tipo == 'salida')
+        .scalar() or 0.0
+    )
 
-    total_gastos = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'gasto').scalar() or 0.0
+    total_gastos = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(MovimientoCaja.tipo == 'gasto')
+        .scalar() or 0.0
+    )
 
     caja_total = total_entradas - total_salidas - total_gastos
-    cartera_total = float(db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0)).scalar() or 0.0)
+    cartera_total = float(
+        db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0)).scalar() or 0.0
+    )
 
     return {'caja_total': caja_total, 'cartera_total': cartera_total}
 
-# ==========================================================
-# 🔄 RECONSTRUIR MOVIMIENTOS DE PRÉSTAMOS
-# ==========================================================
-from modelos import Prestamo, MovimientoCaja, Cliente
-from extensions import db
-from datetime import datetime, date
 
+# ======================================================
+# 🔄 RECONSTRUIR MOVIMIENTOS DE PRÉSTAMOS
+# ======================================================
 def reconstruir_movimientos_prestamos():
     """
     🔧 Repara la tabla MovimientoCaja eliminando todos los movimientos tipo 'prestamo'
     y los vuelve a generar solo para clientes activos (no cancelados).
     Luego actualiza la liquidación del día actual.
     """
-    # 1️⃣ Eliminar todos los movimientos de préstamo existentes
     borrados = MovimientoCaja.query.filter_by(tipo="prestamo").delete()
     db.session.commit()
     print(f"🗑️ Movimientos de préstamo eliminados: {borrados}")
 
-    # 2️⃣ Recrear movimientos válidos desde los préstamos activos
     nuevos = 0
     for p in Prestamo.query.all():
         if p.cliente and not p.cliente.cancelado:
@@ -91,48 +94,79 @@ def reconstruir_movimientos_prestamos():
     db.session.commit()
     print(f"✅ Movimientos válidos reconstruidos: {nuevos}")
 
-    # 3️⃣ Recalcular la liquidación actual
     from helpers import actualizar_liquidacion_por_movimiento
-    liq = actualizar_liquidacion_por_movimiento(date.today())
+    liq = actualizar_liquidacion_por_movimiento(local_date())
 
     print(f"📅 Liquidación del {liq.fecha} actualizada correctamente.")
     print(f"💰 Caja final: {liq.caja:.2f}")
     return liq
 
+
 # ---------------------------------------------------
 # 🔹 Actualizar liquidación diaria
 # ---------------------------------------------------
 def actualizar_liquidacion_por_movimiento(fecha: date):
-    """Recalcula la liquidación para una fecha según movimientos y abonos."""
+    """Recalcula la liquidación para una fecha según movimientos y abonos (hora Chile)."""
     start, end = day_range(fecha)
 
     # 💰 Abonos de clientes
-    entradas_abonos = db.session.query(func.coalesce(func.sum(Abono.monto), 0)) \
-        .join(Prestamo, Abono.prestamo_id == Prestamo.id) \
-        .filter(Abono.fecha >= start, Abono.fecha < end).scalar() or 0.0
+    entradas_abonos = (
+        db.session.query(func.coalesce(func.sum(Abono.monto), 0))
+        .join(Prestamo, Abono.prestamo_id == Prestamo.id)
+        .filter(Abono.fecha >= start, Abono.fecha < end)
+        .scalar() or 0.0
+    )
 
     # 💵 Entradas manuales
-    entradas_manual = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'entrada_manual',
-                MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end).scalar() or 0.0
+    entradas_manual = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(
+            MovimientoCaja.tipo == 'entrada_manual',
+            MovimientoCaja.fecha >= start,
+            MovimientoCaja.fecha < end,
+        )
+        .scalar() or 0.0
+    )
 
     # 💸 Salidas manuales
-    salidas_manual = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'salida',
-                MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end).scalar() or 0.0
+    salidas_manual = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(
+            MovimientoCaja.tipo == 'salida',
+            MovimientoCaja.fecha >= start,
+            MovimientoCaja.fecha < end,
+        )
+        .scalar() or 0.0
+    )
 
     # 🧾 Gastos
-    gastos = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'gasto',
-                MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end).scalar() or 0.0
+    gastos = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(
+            MovimientoCaja.tipo == 'gasto',
+            MovimientoCaja.fecha >= start,
+            MovimientoCaja.fecha < end,
+        )
+        .scalar() or 0.0
+    )
 
     # 🏦 Préstamos entregados
-    prestamos_entregados = db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)) \
-        .filter(MovimientoCaja.tipo == 'prestamo',
-                MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end).scalar() or 0.0
+    prestamos_entregados = (
+        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0))
+        .filter(
+            MovimientoCaja.tipo == 'prestamo',
+            MovimientoCaja.fecha >= start,
+            MovimientoCaja.fecha < end,
+        )
+        .scalar() or 0.0
+    )
 
     # 📦 Caja anterior
-    liq_anterior = Liquidacion.query.filter(Liquidacion.fecha < fecha).order_by(Liquidacion.fecha.desc()).first()
+    liq_anterior = (
+        Liquidacion.query.filter(Liquidacion.fecha < fecha)
+        .order_by(Liquidacion.fecha.desc())
+        .first()
+    )
     caja_anterior = liq_anterior.caja if liq_anterior else 0.0
 
     # 🔢 Calcular totales
@@ -165,8 +199,6 @@ def reparar_cliente(nombre: str | int):
     - Actualiza la liquidación del día actual.
     Puede usarse por nombre o por ID.
     """
-
-    # Permite buscar por ID o por nombre
     if isinstance(nombre, int):
         cliente = Cliente.query.get(nombre)
     else:
@@ -180,26 +212,40 @@ def reparar_cliente(nombre: str | int):
         print(f"ℹ️ El cliente '{cliente.nombre}' no tiene saldo para revertir (saldo actual = {cliente.saldo}).")
         return
 
-    # Crear movimiento de reverso
+    # 💵 Crear movimiento de reverso
     mov = MovimientoCaja(
         tipo="entrada_manual",
         monto=cliente.saldo,
         descripcion=f"Reverso manual cliente {cliente.nombre}",
-        fecha=datetime.now()
+        fecha=hora_actual(),  # 👈 hora local de Chile
     )
     db.session.add(mov)
 
-    # Actualizar cliente
     saldo_devuelto = cliente.saldo
     cliente.saldo = 0
     cliente.cancelado = True
     db.session.commit()
 
-    # Recalcular liquidación del día
     try:
-        actualizar_liquidacion_por_movimiento(date.today())
+        actualizar_liquidacion_por_movimiento(local_date())
     except Exception as e:
         print(f"⚠️ No se pudo actualizar la liquidación automáticamente: {e}")
 
     print(f"✅ Cliente '{cliente.nombre}' reparado correctamente.")
     print(f"💰 Se devolvieron ${saldo_devuelto:.2f} a la caja.")
+
+# ======================================================
+# 🧭 Función para normalizar hora sin zona (modo local Chile)
+# ======================================================
+def hora_sin_tz(dt=None):
+    """
+    Convierte cualquier datetime a hora chilena sin tzinfo (naive),
+    útil para guardar en BD sin perder la hora real local.
+    """
+    if dt is None:
+        dt = datetime.now(CHILE_TZ)
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(CHILE_TZ).replace(tzinfo=None)
+
+

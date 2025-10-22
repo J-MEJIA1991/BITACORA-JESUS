@@ -3,19 +3,14 @@
 
 {% block content %}
 <h2 class="mb-4">📋 Listado de Clientes</h2>
+<p class="text-end text-muted mb-3">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
 
 <!-- =================== BOTONES PRINCIPALES =================== -->
 <div class="mb-3 d-flex flex-wrap gap-2">
-  <a class="btn btn-primary" href="{{ url_for('rutas.nuevo_cliente') }}">➕ Nuevo Cliente</a>
-  <a class="btn btn-secondary" href="{{ url_for('rutas.liquidacion_view') }}">📊 Ver Liquidación</a>
-  <a class="btn btn-outline-dark" href="{{ url_for('rutas.clientes_cancelados_view') }}">🚫 Cancelados</a>
-</div>
-
-<!-- =================== FECHA Y TOTALES =================== -->
-<p><strong>Fecha:</strong> {{ hoy.strftime("%d/%m/%Y") }}</p>
-<div class="mb-3">
-  <strong>Caja total:</strong> ${{ "%.2f"|format(resumen.caja_total) }} |
-  <strong>Cartera total:</strong> ${{ "%.2f"|format(resumen.cartera_total) }}
+  <a class="btn btn-primary" href="{{ url_for('app_rutas.nuevo_cliente') }}">➕ Nuevo Cliente</a>
+  <a class="btn btn-secondary" href="{{ url_for('app_rutas.liquidacion_view') }}">📊 Ver Liquidación</a>
+  <a class="btn btn-outline-dark" href="{{ url_for('app_rutas.clientes_cancelados_view') }}">🚫 Cancelados</a>
+  <a class="btn btn-outline-primary" href="{{ url_for('app_rutas.dashboard') }}">📈 Dashboard</a>
 </div>
 
 <!-- =================== TABLA DE CLIENTES =================== -->
@@ -44,7 +39,7 @@
 
       <!-- ORDEN -->
       <td style="width:100px;">
-        <form action="{{ url_for('rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
+        <form action="{{ url_for('app_rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
           <input type="number" name="orden" value="{{ c.orden }}" class="form-control text-center" style="width:70px;" {% if c.cancelado %}disabled{% endif %}>
           <button type="submit" class="btn btn-outline-primary ms-1 btn-sm" {% if c.cancelado %}disabled{% endif %}>✔</button>
         </form>
@@ -78,7 +73,7 @@
       <!-- ABONAR -->
       <td class="abono-td">
         {% if not c.cancelado %}
-        <form action="{{ url_for('rutas.registrar_abono_por_codigo') }}" 
+        <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}" 
               method="post" 
               class="d-flex justify-content-center form-abono"
               data-orden="{{ c.orden }}">
@@ -116,7 +111,7 @@
 
       <!-- ELIMINAR -->
       <td>
-        <form action="{{ url_for('rutas.eliminar_cliente', cliente_id=c.id) }}" method="post"
+        <form action="{{ url_for('app_rutas.eliminar_cliente', cliente_id=c.id) }}" method="post"
               onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
           <button type="submit" class="btn btn-danger btn-sm">❌</button>
         </form>

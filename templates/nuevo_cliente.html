@@ -1,10 +1,11 @@
-
 {% extends "base.html" %}
 {% block title %}Nuevo Cliente{% endblock %}
 {% block content %}
 <h2>🧾 Nuevo Cliente</h2>
+<p class="text-muted mb-4">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
 
-<form id="formCliente" action="{{ url_for('rutas.nuevo_cliente') }}" method="post" class="row g-3">
+
+<form id="formCliente" action="{{ url_for('app_rutas.nuevo_cliente') }}" method="post" class="row g-3">
 
   <!-- BLOQUE 1: Nombre y Dirección -->
   <div class="card mb-3 p-3 w-100" id="bloqueNombreDireccion">
@@ -69,7 +70,7 @@
 
   <div class="col-12 mt-3">
     <button type="submit" class="btn btn-success">Guardar Cliente</button>
-    <a href="{{ url_for('rutas.index') }}" class="btn btn-secondary">Cancelar</a>
+    <a href="{{ url_for('app_rutas.index') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
 

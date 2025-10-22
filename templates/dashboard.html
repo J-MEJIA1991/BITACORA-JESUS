@@ -1,61 +1,84 @@
-
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}📊 Dashboard — Créditos{% endblock %}
+
 {% block content %}
-<h2 class="mb-4 text-center">📊 Dashboard General</h2>
-<div class="row g-3 justify-content-center">
+<div class="container mt-4 mb-5">
+  <h2 class="text-center mb-4 fw-bold text-primary">📊 Dashboard General del Sistema de Créditos</h2>
 
-  <!-- Total Clientes -->
-  <div class="col-md-3">
-    <div class="card p-3 text-center shadow-sm rounded">
-      <h5>Total Clientes</h5>
-      <h3>{{ total_clientes }}</h3>
+  <!-- 📈 Tarjetas principales -->
+  <div class="row g-4 justify-content-center">
+    
+    <!-- Total de Clientes Activos -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 bg-info text-white">
+        <h6>👥 Clientes Activos</h6>
+        <h2 class="fw-bold">{{ total_clientes_activos }}</h2>
+      </div>
+    </div>
+
+    <!-- Total Abonos -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 bg-success text-white">
+        <h6>💰 Total Abonos del Día</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(total_abonos) }}</h2>
+      </div>
+    </div>
+
+    <!-- Total Préstamos -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 bg-danger text-white">
+        <h6>🏦 Total Préstamos del Día</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(total_prestamos) }}</h2>
+      </div>
+    </div>
+
+    <!-- Entradas -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 bg-primary text-white">
+        <h6>📥 Entradas Manuales</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(total_entradas) }}</h2>
+      </div>
+    </div>
+
+    <!-- Salidas -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 bg-warning text-dark">
+        <h6>📤 Salidas de Efectivo</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(total_salidas) }}</h2>
+      </div>
+    </div>
+
+    <!-- Gastos -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 bg-secondary text-white">
+        <h6>🧾 Gastos del Día</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(total_gastos) }}</h2>
+      </div>
+    </div>
+
+    <!-- Caja Total -->
+    <div class="col-md-4 col-lg-3">
+      <div class="card text-center p-3 shadow-sm border-0 
+           {% if caja_total >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+        <h6>💼 Caja Total del Día</h6>
+        <h2 class="fw-bold">${{ "%.2f"|format(caja_total) }}</h2>
+      </div>
     </div>
   </div>
 
-  <!-- Total Abonos -->
-  <div class="col-md-3">
-    <div class="card p-3 text-center shadow-sm rounded">
-      <h5>Total Abonos</h5>
-      <h3>{{ "%.2f"|format(total_abonos) }}</h3>
-    </div>
-  </div>
-
-  <!-- Total Préstamos -->
-  <div class="col-md-3">
-    <div class="card p-3 text-center shadow-sm rounded">
-      <h5>Total Préstamos</h5>
-      <h3>{{ "%.2f"|format(total_prestamos) }}</h3>
-    </div>
-  </div>
-
-  <!-- Total Productos -->
-  <div class="col-md-3">
-    <div class="card p-3 text-center shadow-sm rounded">
-      <h5>Total Productos</h5>
-      <h3>{{ total_productos }}</h3>
-    </div>
-  </div>
-
-  <!-- Total Unidades Vendidas -->
-  <div class="col-md-3">
-    <div class="card p-3 text-center shadow-sm rounded">
-      <h5>Total Unidades Vendidas</h5>
-      <h3>{{ total_unidades_vendidas }}</h3>
-    </div>
-  </div>
-
-  <!-- Valor Total Vendido -->
-  <div class="col-md-3">
-    <div class="card p-3 text-center shadow-sm rounded">
-      <h5>Valor Total Vendido</h5>
-      <h3>{{ "%.2f"|format(valor_total_vendido) }}</h3>
-    </div>
+  <!-- 🕒 Hora actual -->
+  <div class="text-center mt-5">
+    <hr>
+    <p class="text-muted">
+      🕒 Hora actual en Chile: <strong>{{ hora_actual() }}</strong><br>
+      📅 Fecha del sistema: <strong>{{ hoy.strftime("%d-%m-%Y") }}</strong>
+    </p>
   </div>
 </div>
 
 <style>
-  .card h3 { font-weight: bold; color: #0d6efd; }
-  .card h5 { color: #444; }
+  .card h6 { font-weight: 500; margin-bottom: .4rem; }
+  .card h2 { font-size: 1.8rem; }
+  .shadow-sm { box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important; }
 </style>
 {% endblock %}

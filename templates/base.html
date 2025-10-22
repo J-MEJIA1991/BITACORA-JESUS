@@ -10,13 +10,13 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container-fluid">
             <!-- 🔗 Ajustado: el enlace principal apunta a rutas.index -->
-            <a class="navbar-brand" href="{{ url_for('rutas.index') }}">💼 Sistema de Préstamos</a>
+            <a class="navbar-brand" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
             <div>
                 <!-- 🔗 Todos los botones actualizados con prefijo 'rutas.' -->
-                <a href="{{ url_for('rutas.index') }}" class="btn btn-outline-light btn-sm me-2">Inicio</a>
-                <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-outline-light btn-sm me-2">Liquidación</a>
-                <a href="{{ url_for('rutas.nuevo_cliente') }}" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</a>
-                <a href="{{ url_for('rutas.logout') }}" class="btn btn-danger btn-sm">Salir</a>
+                <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-light btn-sm me-2">Inicio</a>
+                <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-outline-light btn-sm me-2">Liquidación</a>
+                <a href="{{ url_for('app_rutas.nuevo_cliente') }}" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</a>
+                <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm">Salir</a>
             </div>
         </div>
     </nav>

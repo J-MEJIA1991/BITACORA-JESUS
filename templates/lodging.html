@@ -4,6 +4,8 @@
 {% block content %}
 <div class="container mt-4">
   <h2 class="mb-3 text-center text-primary">🏨 Lodging</h2>
+  <p class="text-center text-muted mb-3">🕒 Hora actual en Chile: {{ hora_chile() }}</p>
+
   <p class="text-center text-muted">
     Esta es una plantilla de <strong>lodging</strong> (placeholder).  
     Si la usas con datos, puedo adaptarla para mostrar listados, formularios o reportes según necesites.
@@ -14,7 +16,7 @@
   </div>
 
   <div class="text-center mt-4">
-    <a href="{{ url_for('rutas.index') }}" class="btn btn-secondary">⬅ Volver al Inicio</a>
+    <a href="{{ url_for('app_rutas.index') }}" class="btn btn-secondary">⬅ Volver al Inicio</a>
   </div>
 </div>
 

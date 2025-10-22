@@ -1,26 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Clientes Cancelados{% endblock %}
+{% block title %}🚫 Clientes Cancelados{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-  <h2 class="mb-4">🚫 Clientes Cancelados</h2>
-
-  <div class="mb-3">
-    <!-- 🔹 Corregido: se agrega el prefijo 'rutas.' -->
-    <a href="{{ url_for('rutas.index') }}" class="btn btn-secondary">⬅️ Volver al listado</a>
+  <!-- 🧭 Encabezado -->
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <h2 class="m-0">🚫 Clientes Cancelados</h2>
+    <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-secondary btn-sm">⬅️ Volver al Listado</a>
   </div>
 
   {% if clientes %}
-  <table class="table table-bordered table-hover align-middle text-center">
+  <!-- 📋 Tabla de clientes cancelados -->
+  <table class="table table-bordered table-hover align-middle text-center shadow-sm">
     <thead class="table-dark">
       <tr>
-        <th>Código</th>
-        <th>Nombre</th>
-        <th>Dirección</th>
-        <th>Teléfono</th>
-        <th>Fecha Creación</th>
-        <th>Saldo Total</th>
-        <th>Reactivar</th>
+        <th>📄 Código</th>
+        <th>👤 Nombre</th>
+        <th>📍 Dirección</th>
+        <th>📞 Teléfono</th>
+        <th>📅 Fecha Creación</th>
+        <th>💰 Saldo Total</th>
+        <th>♻️ Reactivar</th>
       </tr>
     </thead>
     <tbody>
@@ -31,22 +31,55 @@
         <td>{{ c.direccion or "—" }}</td>
         <td>{{ c.telefono or "—" }}</td>
         <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
-        <td>${{ "%.2f"|format(c.saldo_total()) }}</td>
+        <td class="fw-bold text-danger">
+          ${{ "%.2f"|format(c.saldo_total()) }}
+        </td>
         <td>
-          <!-- 🔹 También corregido con el prefijo del blueprint -->
-          <form action="{{ url_for('rutas.reactivar_cliente', cliente_id=c.id) }}" method="post"
+          <form action="{{ url_for('app_rutas.reactivar_cliente', cliente_id=c.id) }}" method="post"
                 onsubmit="return confirm('¿Deseas reactivar este cliente?');">
             <button type="submit" class="btn btn-success btn-sm">🔄 Reactivar</button>
           </form>
         </td>
       </tr>
       {% endfor %}
+      <tr class="table-light">
+        <td colspan="5" class="fw-bold text-end">📊 Totales:</td>
+        <td class="fw-bold text-danger">
+          ${{ "%.2f"|format(total_saldos or 0) }}
+        </td>
+        <td class="fw-bold text-secondary">
+          {{ total_cancelados }} clientes
+        </td>
+      </tr>
     </tbody>
   </table>
+
+  <!-- 🕒 Hora actual -->
+  <div class="text-end text-muted mt-3">
+    🕒 Hora actual: {{ hora_actual() }}
+  </div>
+
   {% else %}
-  <div class="alert alert-info text-center">
-    No hay clientes cancelados actualmente.
+  <!-- 🚫 Sin registros -->
+  <div class="alert alert-info text-center shadow-sm">
+    ⚠️ No hay clientes cancelados actualmente.
   </div>
   {% endif %}
 </div>
+
+<!-- 🎨 Estilos adicionales -->
+<style>
+  .table td, .table th {
+    vertical-align: middle;
+  }
+  .btn-outline-secondary {
+    border-radius: 8px;
+  }
+  .shadow-sm {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .fw-bold.text-danger {
+    color: #dc3545 !important;
+  }
+</style>
 {% endblock %}

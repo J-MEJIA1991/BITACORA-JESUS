@@ -1,35 +1,62 @@
-
 {% extends "base.html" %}
-{% block title %}Gastos del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+{% block title %}🧾 Gastos del {{ fecha.strftime("%d/%m/%Y") }}{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-  <h3>🧾 Gastos del {{ fecha.strftime("%d/%m/%Y") }}</h3>
-  {% if gastos %}
-  <table class="table table-striped text-center">
-    <thead class="table-dark">
-      <tr>
-        <th>Monto</th>
-        <th>Descripción</th>
-        <th>Fecha y Hora</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for g in gastos %}
-      <tr>
-        <td>${{ "%.2f"|format(g.monto) }}</td>
-        <td>{{ g.descripcion or 'Sin descripción' }}</td>
-        <td>{{ g.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="alert alert-danger text-center mt-3">
-    <strong>Total Gastos:</strong> ${{ "%.2f"|format(total_gastos) }}
+<div class="container mt-4 mb-5">
+  <!-- 🧭 Encabezado -->
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <h3 class="m-0">🧾 Gastos del {{ fecha.strftime("%d/%m/%Y") }}</h3>
+    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-outline-secondary btn-sm">⬅️ Volver a Liquidación</a>
   </div>
+
+  {% if gastos %}
+  <!-- 📊 Tabla de gastos -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <table class="table table-hover table-bordered align-middle text-center mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>💰 Monto</th>
+            <th>📝 Descripción</th>
+            <th>🕒 Fecha y Hora</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in gastos %}
+          <tr>
+            <td class="fw-bold text-danger">${{ "%.2f"|format(g.monto) }}</td>
+            <td>{{ g.descripcion or "Sin descripción" }}</td>
+            <td>{{ g.fecha.strftime("%d/%m/%Y %H:%M") }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="table-light">
+            <td colspan="2" class="fw-bold text-end">💸 Total Gastos:</td>
+            <td class="fw-bold text-danger">${{ "%.2f"|format(total_gastos) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   {% else %}
-  <div class="alert alert-info text-center mt-3">No se registraron gastos en esta fecha.</div>
+  <!-- 🚫 Sin registros -->
+  <div class="alert alert-info text-center shadow-sm mt-3">
+    ⚠️ No se registraron gastos en esta fecha.
+  </div>
   {% endif %}
-  
-  <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary mt-3">⬅ Volver a Liquidación</a>
+
+  <!-- 🕒 Hora actual -->
+  <div class="text-end text-muted mt-4">
+    🕒 Hora actual en Chile: <strong>{{ hora_chile() }}</strong>
+  </div>
 </div>
+
+<!-- 🎨 Estilos -->
+<style>
+  .table td, .table th { vertical-align: middle; }
+  .table-dark th { background-color: #212529 !important; color: white !important; }
+  .btn-outline-secondary { border-radius: 8px; }
+  .shadow-sm { box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important; }
+  .fw-bold.text-danger { color: #dc3545 !important; }
+</style>
 {% endblock %}

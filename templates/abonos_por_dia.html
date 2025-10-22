@@ -1,43 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Abonos del Día{% endblock %}
+{% block title %}💰 Abonos del Día{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
+  <!-- 🧭 Encabezado -->
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <h2 class="m-0">📋 Abonos del {{ fecha.strftime("%d/%m/%Y") }}</h2>
-    <a href="{{ url_for('liquidaciones') }}" class="btn btn-outline-primary btn-sm">⬅️ Volver al Historial</a>
+    <a href="{{ url_for('app_rutas.liquidaciones') }}" class="btn btn-outline-primary btn-sm">⬅️ Volver al Historial</a>
   </div>
 
   {% if abonos %}
-  <table class="table table-bordered table-hover align-middle text-center">
+  <!-- 📊 Tabla de abonos -->
+  <table class="table table-bordered table-hover align-middle text-center shadow-sm">
     <thead class="table-dark">
       <tr>
-        <th>Hora</th>
-        <th>Cliente</th>
-        <th>Monto</th>
+        <th>🕒 Hora</th>
+        <th>👤 Cliente</th>
+        <th>💵 Monto</th>
       </tr>
     </thead>
     <tbody>
       {% for abono in abonos %}
       <tr>
-        <td>{{ abono.fecha.strftime("%H:%M") }}</td>
+        <td>{{ abono.fecha.strftime("%H:%M:%S") }}</td>
         <td>{{ abono.nombre }}</td>
-        <td class="text-success fw-bold">${{ "%.2f"|format(abono.monto or 0) }}</td>
+        <td class="fw-bold text-success">${{ "%.2f"|format(abono.monto or 0) }}</td>
       </tr>
       {% endfor %}
       <tr class="table-light">
-        <td colspan="2" class="fw-bold text-end">💰 Total del día:</td>
+        <td colspan="2" class="fw-bold text-end">💰 Total del Día:</td>
         <td class="fw-bold text-success">${{ "%.2f"|format(total_abonos or 0) }}</td>
       </tr>
     </tbody>
   </table>
   {% else %}
-  <div class="alert alert-warning text-center mt-3">
+  <!-- 🚫 Sin registros -->
+  <div class="alert alert-warning text-center mt-3 shadow-sm">
     ⚠️ No se registraron abonos en esta fecha.
   </div>
   {% endif %}
+
+  <!-- 🕒 Hora actual -->
+  <div class="text-end mt-4 text-muted">
+    🕒 Hora actual: {{ hora_chile() }}
+  </div>
 </div>
 
+<!-- 🎨 Estilos adicionales -->
 <style>
   .table td, .table th {
     vertical-align: middle;
@@ -47,6 +56,9 @@
   }
   .text-success {
     color: #198754 !important;
+  }
+  .shadow-sm {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 </style>
 {% endblock %}

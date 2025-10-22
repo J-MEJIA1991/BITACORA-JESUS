@@ -1,10 +1,10 @@
-
 {% extends "base.html" %}
 {% block title %}Historial de Liquidaciones{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
   <h2 class="text-center mb-4">📜 Historial de Liquidaciones</h2>
+  <p class="text-center text-muted mb-3">🕒 Hora actual en Chile: {{ hora_chile() }}</p>
 
   <!-- FORMULARIO DE BÚSQUEDA -->
   <form method="get" class="row g-3 mb-4 justify-content-center">
@@ -51,7 +51,7 @@
 
             <!-- 💰 Clickable: Ingresos (abonos) -->
             <td>
-              <a href="{{ url_for('rutas.movimientos_por_dia', tipo='entrada', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
+              <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='entrada', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
                  class="text-decoration-none text-success fw-bold hover-underline">
                 ${{ "%.2f"|format(liq.entradas or 0) }}
               </a>
@@ -59,7 +59,7 @@
 
             <!-- 💵 Clickable: Entradas manuales -->
             <td>
-              <a href="{{ url_for('rutas.movimientos_por_dia', tipo='entrada_manual', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
+              <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='entrada_manual', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
                  class="text-decoration-none text-info fw-bold hover-underline">
                 ${{ "%.2f"|format(liq.entradas_caja or 0) }}
               </a>
@@ -67,7 +67,7 @@
 
             <!-- 🏦 Clickable: Préstamos -->
             <td>
-              <a href="{{ url_for('rutas.prestamos_por_dia', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
+              <a href="{{ url_for('app_rutas.prestamos_por_dia', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
                  class="text-decoration-none text-primary fw-bold hover-underline">
                 ${{ "%.2f"|format(liq.prestamos_hoy or 0) }}
               </a>
@@ -75,7 +75,7 @@
 
             <!-- 💸 Clickable: Salidas -->
             <td>
-              <a href="{{ url_for('rutas.movimientos_por_dia', tipo='salida', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
+              <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='salida', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
                  class="text-decoration-none text-warning fw-bold hover-underline">
                 ${{ "%.2f"|format(liq.salidas or 0) }}
               </a>
@@ -83,7 +83,7 @@
 
             <!-- 🧾 Clickable: Gastos -->
             <td>
-              <a href="{{ url_for('rutas.movimientos_por_dia', tipo='gasto', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
+              <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='gasto', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
                  class="text-decoration-none text-danger fw-bold hover-underline">
                 ${{ "%.2f"|format(liq.gastos or 0) }}
               </a>
@@ -121,7 +121,7 @@
 
   <div class="mt-3 text-center">
     <!-- ✅ Corregido el prefijo -->
-    <a href="{{ url_for('rutas.liquidacion_view') }}" class="btn btn-secondary">⬅️ Volver a Liquidación del Día</a>
+    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-secondary">⬅️ Volver a Liquidación del Día</a>
   </div>
 </div>
 

@@ -3,6 +3,7 @@
 {% block content %}
 <div class="container mt-4">
   <h2 class="mb-3 text-center">🏠 Inicio - Resumen General</h2>
+  <p class="text-center text-muted mb-3">🕒 Hora actual en Chile: {{ hora_chile() }}</p>
   <p class="text-center text-muted">Resumen rápido de clientes (mismo listado que en la página principal).</p>
 
   {% if clientes %}
@@ -31,12 +32,16 @@
   {% endif %}
 
   <div class="text-center mt-4">
-    <a href="{{ url_for('rutas.index') }}" class="btn btn-primary">📋 Ver Listado Completo</a>
+    <a href="{{ url_for('app_rutas.index') }}" class="btn btn-primary">📋 Ver Listado Completo</a>
   </div>
 </div>
 
 <style>
-  .table td, .table th { vertical-align: middle; }
-  h2 { color: #0d6efd; }
+  .table td, .table th { 
+    vertical-align: middle; 
+  }
+  h2 { 
+    color: #0d6efd; 
+  }
 </style>
 {% endblock %}
