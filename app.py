@@ -1,3 +1,4 @@
+
 # ======================================================
 # app.py — versión FINAL y sincronizada (hora local Chile 🇨🇱)
 # ======================================================
@@ -64,8 +65,8 @@ def login_required(f):
 # ======================================================
 # 🔗 Registro de rutas (Blueprint principal)
 # ======================================================
-from rutas import app_rutas as rutas_bp
-app.register_blueprint(rutas_bp)
+from rutas import app_rutas
+app.register_blueprint(app_rutas)
 
 # ======================================================
 # 📦 Inicializar extensiones

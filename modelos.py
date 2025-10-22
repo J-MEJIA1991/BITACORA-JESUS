@@ -121,7 +121,13 @@ class Prestamo(db.Model):
     saldo = db.Column(db.Float, default=0.0)
     frecuencia = db.Column(db.String(20), default="diario")
 
-    abonos = db.relationship("Abono", backref="prestamo", lazy=True)
+    # ✅ Relación corregida: elimina abonos al borrar préstamo
+    abonos = db.relationship(
+        "Abono",
+        backref="prestamo",
+        cascade="all, delete-orphan",
+        lazy=True
+    )
 
 
 # ---------------------------------------------------

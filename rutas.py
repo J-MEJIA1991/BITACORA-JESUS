@@ -237,61 +237,6 @@ def logout():
     flash("👋 Sesión cerrada correctamente.", "info")
     return redirect(url_for("app_rutas.login"))
 
-
-# ======================================================
-# 👥 CLIENTES CANCELADOS — LISTADO Y REACTIVACIÓN
-# ======================================================
-@app_rutas.route("/clientes_cancelados")
-@login_required
-def clientes_cancelados_view():
-    clientes = Cliente.query.filter_by(cancelado=True).order_by(Cliente.nombre.asc()).all()
-    total_cancelados = len(clientes)
-    total_saldos = sum(c.saldo or 0 for c in clientes)
-    return render_template(
-        "clientes_cancelados.html",
-        clientes=clientes,
-        total_cancelados=total_cancelados,
-        total_saldos=total_saldos,
-    )
-
-
-@app_rutas.route("/reactivar_cliente/<int:cliente_id>", methods=["POST"])
-@login_required
-def reactivar_cliente(cliente_id):
-    cliente = Cliente.query.get_or_404(cliente_id)
-
-    if not cliente.cancelado:
-        flash(f"El cliente {cliente.nombre} ya está activo.", "info")
-        return redirect(url_for("app_rutas.clientes_cancelados_view"))
-
-    # ✅ Reactivar cliente
-    cliente.cancelado = False
-    cliente.saldo = 0.0
-    if hasattr(cliente, "ultimo_abono_fecha"):
-        cliente.ultimo_abono_fecha = None
-
-    db.session.commit()
-    flash(f"El cliente {cliente.nombre} fue reactivado correctamente ✅", "success")
-    return redirect(url_for("app_rutas.clientes_cancelados_view"))
-
-
-# ======================================================
-# ✏️ ACTUALIZAR ORDEN DE CLIENTE
-# ======================================================
-@app_rutas.route("/actualizar_orden/<int:cliente_id>", methods=["POST"])
-@login_required
-def actualizar_orden(cliente_id):
-    nueva_orden = request.form.get("orden", type=int)
-    if nueva_orden is None:
-        flash("Debe ingresar un número de orden válido.", "warning")
-        return redirect(url_for("app_rutas.index"))
-
-    cliente = Cliente.query.get_or_404(cliente_id)
-    cliente.orden = nueva_orden
-    db.session.commit()
-
-    flash(f"Orden del cliente {cliente.nombre} actualizada a {nueva_orden}.", "success")
-    return redirect(url_for("app_rutas.index"))
 # ======================================================
 # 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y REACTIVACIÓN
 # ======================================================
@@ -404,6 +349,179 @@ def nuevo_cliente():
     codigo_sugerido = generar_codigo_cliente()
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
 
+
+# ======================================================
+# 📋 CLIENTES CANCELADOS — vista principal (versión limpia y estable)
+# ======================================================
+@app_rutas.route("/clientes_cancelados")
+@login_required
+def clientes_cancelados_view():
+    """
+    Muestra solo los clientes realmente cancelados:
+    - cancelado=True
+    - saldo <= 0
+    - tienen al menos un préstamo
+    - calcula días, salida, último abono, etc.
+    """
+    from datetime import datetime
+
+    # 🔍 Obtener los clientes cancelados ordenados
+    clientes_cancelados = (
+        Cliente.query
+        .filter(
+            Cliente.cancelado == True,
+            Cliente.saldo <= 0.01  # 💰 saldo cerrado
+        )
+        .order_by(Cliente.orden.asc().nullslast())
+        .all()
+    )
+
+    # 🧮 Enriquecer con datos calculados
+    data = []
+    for c in clientes_cancelados:
+        # 🚫 Si el cliente no tiene préstamos, lo saltamos (probablemente fue eliminado)
+        if not c.prestamos:
+            continue
+
+        prestamo = max(c.prestamos, key=lambda p: p.fecha)
+        dias_duracion = 0
+        fecha_salida = None
+        salida_total = 0.0
+        ultimo_abono_fecha = None
+        ultimo_abono_monto = 0.0
+
+        # 📅 Fecha y duración
+        if c.ultimo_abono_fecha:
+            fecha_salida = c.ultimo_abono_fecha
+            try:
+                dias_duracion = (c.ultimo_abono_fecha - prestamo.fecha).days
+            except TypeError:
+                dias_duracion = 0
+        else:
+            fecha_salida = prestamo.fecha
+            dias_duracion = 0
+
+        # 💰 Salida total = monto + interés
+        salida_total = prestamo.monto + (prestamo.monto * (prestamo.interes or 0) / 100)
+
+        # 🧾 Último abono
+        if prestamo.abonos:
+            ultimo = max(prestamo.abonos, key=lambda a: a.fecha)
+            ultimo_abono_fecha = ultimo.fecha
+            ultimo_abono_monto = ultimo.monto
+
+        # 📦 Agregar información consolidada
+        data.append({
+            "id": c.id,
+            "orden": c.orden,
+            "codigo": c.codigo,
+            "dias": dias_duracion,
+            "fecha_salida": fecha_salida.strftime("%d-%m-%Y") if fecha_salida else "—",
+            "nombre": c.nombre,
+            "salida_total": salida_total,
+            "ultimo_abono_monto": ultimo_abono_monto,
+            "saldo": round(c.saldo or 0.0, 2),
+        })
+
+    # 🖥️ Renderizar plantilla con los datos listos
+    return render_template("clientes_cancelados.html", clientes=data)
+
+# ======================================================
+# 🔁 REACTIVAR CLIENTE DESDE CANCELADOS (con ajuste de CAJA y orden por defecto)
+# ======================================================
+@app_rutas.route("/reactivar_cliente/<int:cliente_id>", methods=["POST"])
+@login_required
+def reactivar_cliente(cliente_id):
+    from sqlalchemy import func
+    cliente = Cliente.query.get_or_404(cliente_id)
+
+    if not cliente.cancelado:
+        msg = f"El cliente {cliente.nombre} ya está activo."
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": msg}), 400
+        flash(msg, "info")
+        return redirect(url_for("app_rutas.clientes_cancelados_view"))
+
+    try:
+        deuda_pendiente = float(request.form.get("abono", 0) or 0)
+    except ValueError:
+        deuda_pendiente = 0.0
+
+    prestamo = max(cliente.prestamos, key=lambda p: p.fecha) if cliente.prestamos else None
+
+    if deuda_pendiente > 0:
+        if prestamo:
+            prestamo.saldo = (prestamo.saldo or 0.0) + deuda_pendiente
+        else:
+            prestamo = Prestamo(
+                cliente_id=cliente.id,
+                monto=deuda_pendiente,
+                interes=0.0,
+                plazo=0,
+                fecha=local_date(),
+                saldo=deuda_pendiente,
+                frecuencia="diario",
+            )
+            db.session.add(prestamo)
+
+        mov = MovimientoCaja(
+            tipo="salida",
+            monto=deuda_pendiente,
+            descripcion=f"Ajuste reactivación – deuda pendiente de {cliente.nombre}",
+            fecha=hora_actual(),
+        )
+        db.session.add(mov)
+
+    cliente.cancelado = False
+    cliente.saldo = (
+        db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0))
+        .filter(Prestamo.cliente_id == cliente.id)
+        .scalar()
+        or 0.0
+    )
+    if not cliente.orden or cliente.orden <= 0:
+        cliente.orden = 1
+
+    db.session.commit()
+    actualizar_liquidacion_por_movimiento(local_date())
+
+    # ⚡ Si viene desde fetch → devolvemos JSON
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({
+            "ok": True,
+            "id": cliente.id,
+            "nombre": cliente.nombre,
+            "saldo": float(cliente.saldo),
+            "deuda": float(deuda_pendiente),
+        }), 200
+
+    flash(
+        f"Cliente {cliente.nombre} reactivado correctamente. "
+        f"Saldo pendiente: ${cliente.saldo:.2f} (caja ajustada -${deuda_pendiente:.2f})",
+        "success"
+    )
+    return redirect(url_for("app_rutas.index"))
+
+# ======================================================
+# ✏️ ACTUALIZAR ORDEN DE CLIENTE
+# ======================================================
+@app_rutas.route("/actualizar_orden/<int:cliente_id>", methods=["POST"])
+@login_required
+def actualizar_orden(cliente_id):
+    nueva_orden = request.form.get("orden", type=int)
+    if nueva_orden is None:
+        flash("Debe ingresar un número de orden válido.", "warning")
+        return redirect(url_for("app_rutas.index"))
+
+    cliente = Cliente.query.get_or_404(cliente_id)
+    cliente.orden = nueva_orden
+    db.session.commit()
+
+    flash(f"Orden del cliente {cliente.nombre} actualizada a {nueva_orden}.", "success")
+    return redirect(url_for("app_rutas.index")) 
+
+
+
 # ======================================================
 # ❌ ELIMINAR CLIENTE — CON REINTEGRO ÚNICO
 # ======================================================
@@ -494,11 +612,13 @@ def otorgar_prestamo(cliente_id):
     return redirect(url_for("app_rutas.index"))
 
 # ======================================================
-# 💰 REGISTRAR ABONO POR CÓDIGO
+# 💰 REGISTRAR ABONO POR CÓDIGO (versión AJAX estable)
 # ======================================================
 @app_rutas.route("/registrar_abono_por_codigo", methods=["POST"])
 @login_required
 def registrar_abono_por_codigo():
+    from sqlalchemy import func
+
     codigo = request.form.get("codigo", "").strip()
     monto = float(request.form.get("monto") or 0)
 
@@ -535,7 +655,7 @@ def registrar_abono_por_codigo():
     abono = Abono(
         prestamo_id=prestamo.id,
         monto=monto,
-        fecha=hora_actual(),  # ✅ hora local de Chile (corrige el NameError)
+        fecha=hora_actual(),  # ✅ hora local de Chile
     )
     db.session.add(abono)
 
@@ -567,87 +687,78 @@ def registrar_abono_por_codigo():
 
     # ⚡ Respuesta AJAX
     if request.headers.get("X-Requested-With") == "fetch":
-        payload = {
+        return jsonify({
             "ok": True,
             "cliente_id": cliente.id,
+            "nombre": cliente.nombre,
             "saldo": float(cliente.saldo),
             "cancelado": cancelado,
-        }
-        if hasattr(cliente, "ultimo_abono_fecha"):
-            payload["fecha_abono"] = cliente.ultimo_abono_fecha.strftime("%Y-%m-%d")
-        return jsonify(payload), 200
+            "monto": monto,
+            "fecha_abono": cliente.ultimo_abono_fecha.strftime("%Y-%m-%d") if hasattr(cliente, "ultimo_abono_fecha") else None
+        }), 200
 
+    # 📩 Si es navegación normal
     flash(f"💰 Abono de ${monto:.2f} registrado para {cliente.nombre}", "success")
     return redirect(url_for("app_rutas.index"))
 
+
 # ======================================================
-# 📜 HISTORIAL DE ABONOS POR CLIENTE
+# 🧾 HISTORIAL DE ABONOS — para modal (vista cancelados)
 # ======================================================
 @app_rutas.route("/historial_abonos/<int:cliente_id>")
 @login_required
 def historial_abonos(cliente_id):
+    """Devuelve el historial de abonos de un cliente en formato HTML para el modal."""
     cliente = Cliente.query.get_or_404(cliente_id)
     prestamo = cliente.prestamos[-1] if cliente.prestamos else None
 
-    if prestamo:
-        monto = float(prestamo.monto or 0.0)
-        interes = float(prestamo.interes or 0.0)
-        plazo = int(prestamo.plazo or 0)
-        total = monto + (monto * interes / 100)
-        cuota = (total / plazo) if plazo > 0 else 0.0
-        modo = prestamo.frecuencia or "—"
-        fecha_inicial = prestamo.fecha.strftime("%d-%m-%Y") if prestamo.fecha else "—"
-    else:
-        monto = total = cuota = 0.0
-        modo = fecha_inicial = "—"
+    if not prestamo:
+        return "<p class='text-center text-muted'>Este cliente no tiene préstamos registrados.</p>"
 
-    datos_prestamo = {
-        "nombre": cliente.nombre,
-        "fecha_inicial": fecha_inicial,
-        "monto": monto,
-        "total": total,
-        "cuota": cuota,
-        "modo": modo,
-        "datos": cliente.direccion or "—",
-        "saldo": float(cliente.saldo or 0.0),
-    }
+    abonos = sorted(prestamo.abonos, key=lambda a: a.fecha, reverse=True)
+    if not abonos:
+        return "<p class='text-center text-muted'>No se registran abonos para este cliente.</p>"
 
-    items = []
-    saldo_inicial = float(cliente.saldo or total)
+    # 🧮 Calcular saldo progresivo
+    saldo_actual = prestamo.saldo + sum(a.monto for a in abonos)
 
-    if prestamo and prestamo.abonos:
-        abonos_ordenados = sorted(prestamo.abonos, key=lambda x: x.fecha)
-        saldo_restante = saldo_inicial
-        for a in reversed(abonos_ordenados):
-            saldo_restante += float(a.monto or 0.0)
+    html = f"""
+    <h5 class="text-center mb-3">Historial de Abonos — {cliente.nombre}</h5>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered table-striped align-middle text-center">
+        <thead class="table-dark">
+          <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Monto</th>
+            <th>Saldo restante</th>
+          </tr>
+        </thead>
+        <tbody>
+    """
 
-        saldo_actual = saldo_restante
-        for a in abonos_ordenados:
-            saldo_actual -= float(a.monto or 0.0)
-            if saldo_actual < 0:
-                saldo_actual = 0.0
-            items.append({
-                "id": a.id,
-                "codigo": cliente.codigo,
-                "fecha": a.fecha.astimezone().strftime("%d-%m-%Y"),  # ✅ hora local Chile
-                "hora": a.fecha.astimezone().strftime("%I:%M:%S %p"),
-                "monto": float(a.monto),
-                "saldo": round(saldo_actual, 2)
-            })
-        items.reverse()
+    for i, ab in enumerate(abonos, 1):
+        fecha = ab.fecha.strftime("%d-%m-%Y")
+        hora = ab.fecha.strftime("%H:%M:%S")
+        saldo_actual -= ab.monto
+        html += f"""
+          <tr>
+            <td>{i}</td>
+            <td>{fecha}</td>
+            <td>{hora}</td>
+            <td>${ab.monto:,.2f}</td>
+            <td>${saldo_actual:,.2f}</td>
+          </tr>
+        """
 
-    if not items:
-        items.append({
-            "id": 0,
-            "codigo": cliente.codigo,
-            "fecha": hora_actual().strftime("%d-%m-%Y"),
-            "hora": "auto",
-            "monto": 0.00,
-            "saldo": round(float(cliente.saldo or total or 0.0), 2)
-        })
+    html += """
+        </tbody>
+      </table>
+    </div>
+    """
 
-    return jsonify({"ok": True, "prestamo": datos_prestamo, "abonos": items})
-
+    return html
 
 # ======================================================
 # 💵 REGISTRAR ABONO DIRECTO POR CLIENTE
