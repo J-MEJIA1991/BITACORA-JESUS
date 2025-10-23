@@ -18,6 +18,8 @@ from helpers import (
     obtener_resumen_total,
     actualizar_liquidacion_por_movimiento,
 )
+from tiempo import hora_actual, to_hora_chile as hora_chile  # ✅ CORRECTO, sin import circular
+
 
 # ======================================================
 # 🕒 CONFIGURACIÓN HORARIA Y UTILIDADES
@@ -612,12 +614,13 @@ def otorgar_prestamo(cliente_id):
     return redirect(url_for("app_rutas.index"))
 
 # ======================================================
-# 💰 REGISTRAR ABONO POR CÓDIGO (versión AJAX estable)
+# 💰 REGISTRAR ABONO POR CÓDIGO (versión AJAX con interés mensual)
 # ======================================================
 @app_rutas.route("/registrar_abono_por_codigo", methods=["POST"])
 @login_required
 def registrar_abono_por_codigo():
     from sqlalchemy import func
+    from datetime import timedelta
 
     codigo = request.form.get("codigo", "").strip()
     monto = float(request.form.get("monto") or 0)
@@ -650,6 +653,25 @@ def registrar_abono_por_codigo():
         if request.headers.get("X-Requested-With") == "fetch":
             return jsonify({"ok": False, "error": msg}), 400
         return redirect(url_for("app_rutas.index"))
+
+    # 🧮 Verificar si debe reaplicarse el interés mensual (solo para frecuencia mensual)
+    dias_transcurridos = 0
+    if (prestamo.frecuencia or "").lower() == "mensual":
+        dias_transcurridos = (local_date() - (prestamo.ultima_aplicacion_interes or prestamo.fecha)).days
+        if dias_transcurridos >= 30:
+            interes_extra = prestamo.monto * (prestamo.interes or 0) / 100
+            prestamo.saldo += interes_extra
+            prestamo.ultima_aplicacion_interes = local_date()
+
+            # 💵 Registrar movimiento del interés en la caja
+            mov = MovimientoCaja(
+                tipo="entrada_manual",
+                monto=interes_extra,
+                descripcion=f"Interés mensual aplicado a {cliente.nombre}",
+                fecha=hora_actual()
+            )
+            db.session.add(mov)
+            flash(f"📈 Se aplicó un nuevo interés mensual de ${interes_extra:.2f} a {cliente.nombre}", "info")
 
     # 💵 Registrar abono
     abono = Abono(
@@ -694,13 +716,13 @@ def registrar_abono_por_codigo():
             "saldo": float(cliente.saldo),
             "cancelado": cancelado,
             "monto": monto,
-            "fecha_abono": cliente.ultimo_abono_fecha.strftime("%Y-%m-%d") if hasattr(cliente, "ultimo_abono_fecha") else None
+            "fecha_abono": cliente.ultimo_abono_fecha.strftime("%Y-%m-%d") if hasattr(cliente, "ultimo_abono_fecha") else None,
+            "interes_aplicado": dias_transcurridos >= 30 if (prestamo.frecuencia or '').lower() == 'mensual' else False
         }), 200
 
     # 📩 Si es navegación normal
     flash(f"💰 Abono de ${monto:.2f} registrado para {cliente.nombre}", "success")
     return redirect(url_for("app_rutas.index"))
-
 
 # ======================================================
 # 🧾 HISTORIAL DE ABONOS — para modal (vista cancelados)
@@ -752,7 +774,7 @@ def historial_abonos_html(cliente_id):
     return html
 
 # ======================================================
-# 🧾 HISTORIAL DE ABONOS — versión JSON (para vista principal)
+# 🧾 HISTORIAL DE ABONOS — CORREGIDO (orden y saldo real)
 # ======================================================
 @app_rutas.route("/historial_abonos/<int:cliente_id>")
 @login_required
@@ -770,38 +792,45 @@ def historial_abonos_json(cliente_id):
     if not prestamo:
         return jsonify({"ok": False, "error": "El cliente no tiene préstamos registrados."})
 
-    abonos = sorted(prestamo.abonos, key=lambda a: a.fecha or datetime.min, reverse=True)
+    # 🔹 Ordenar por fecha ascendente (más antiguos primero)
+    abonos = sorted(prestamo.abonos, key=lambda a: a.fecha or datetime.min)
     if not abonos:
         return jsonify({"ok": False, "error": "No se registran abonos para este cliente."})
 
+    # 🔹 Calcular el saldo histórico correctamente
+    saldo_restante = prestamo.monto + (prestamo.monto * (prestamo.interes or 0) / 100)
     data_abonos = []
-    saldo_actual = prestamo.saldo + sum(a.monto or 0 for a in abonos)
 
     for ab in abonos:
         fecha = ab.fecha.strftime("%d-%m-%Y") if ab.fecha else "-"
         hora = ab.fecha.strftime("%H:%M:%S") if ab.fecha else "-"
-        saldo_actual -= ab.monto or 0
+        saldo_restante -= ab.monto or 0
         data_abonos.append({
             "id": ab.id,
             "codigo": cliente.codigo,
             "fecha": fecha,
             "hora": hora,
             "monto": ab.monto or 0,
-            "saldo": saldo_actual
+            "saldo": round(max(saldo_restante, 0), 2)
         })
 
+    # 🔹 Información del préstamo
     data_prestamo = {
         "nombre": cliente.nombre,
         "fecha_inicial": prestamo.fecha.strftime("%d-%m-%Y") if prestamo.fecha else "-",
-        "monto": prestamo.monto or 0,
-        "total": prestamo.monto + (prestamo.monto * (prestamo.interes or 0) / 100),
-        "cuota": prestamo.cuota if hasattr(prestamo, "cuota") else 0,
+        "monto": float(prestamo.monto or 0),
+        "total": round(prestamo.monto + (prestamo.monto * (prestamo.interes or 0) / 100), 2),
+        "cuota": float(getattr(prestamo, "cuota", 0)),
         "modo": prestamo.frecuencia or "-",
-        "datos": prestamo.detalle if hasattr(prestamo, "detalle") else "-",
-        "saldo": prestamo.saldo or 0,
+        "datos": getattr(prestamo, "detalle", "-"),
+        "saldo": float(prestamo.saldo or 0),
     }
 
-    return jsonify({"ok": True, "prestamo": data_prestamo, "abonos": data_abonos})
+    return jsonify({
+        "ok": True,
+        "prestamo": data_prestamo,
+        "abonos": data_abonos
+    })
 
 
 # ======================================================
@@ -1080,28 +1109,73 @@ def liquidacion_view():
 
 
 # ======================================================
-# 🗂️ LIQUIDACIONES — HISTÓRICO Y RANGO DE FECHAS
+# 🗂️ LIQUIDACIONES — HISTÓRICO Y RANGO DE FECHAS (completo, con días vacíos)
 # ======================================================
-@app_rutas.route("/liquidaciones", methods=["GET", "POST"])
+@app_rutas.route("/liquidaciones", methods=["GET"])
 @login_required
 def liquidaciones():
     fecha_desde = request.args.get("desde")
     fecha_hasta = request.args.get("hasta")
 
-    query = Liquidacion.query
+    # Si no hay rango, mostrar últimos 10 registros
+    if not fecha_desde or not fecha_hasta:
+        liquidaciones = (
+            Liquidacion.query.order_by(Liquidacion.fecha.desc()).limit(10).all()
+        )
+        resumen = obtener_resumen_total()
+        return render_template(
+            "liquidaciones.html",
+            liquidaciones=liquidaciones,
+            fecha_desde=None,
+            fecha_hasta=None,
+            total_entradas=sum(l.entradas or 0 for l in liquidaciones),
+            total_prestamos=sum(l.prestamos_hoy or 0 for l in liquidaciones),
+            total_entradas_caja=sum(l.entradas_caja or 0 for l in liquidaciones),
+            total_salidas=sum(l.salidas or 0 for l in liquidaciones),
+            total_gastos=sum(l.gastos or 0 for l in liquidaciones),
+            total_caja=sum(l.caja or 0 for l in liquidaciones),
+            resumen=resumen,
+            hora_chile=hora_chile,
+            hora_actual=hora_actual,
+        )
 
-    if fecha_desde and fecha_hasta:
-        try:
-            desde = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-            hasta = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
-            query = query.filter(Liquidacion.fecha >= desde, Liquidacion.fecha <= hasta)
-        except ValueError:
-            flash("Formato de fecha inválido. Use YYYY-MM-DD", "danger")
-            return redirect(url_for("app_rutas.liquidaciones"))
-    else:
-        query = query.order_by(Liquidacion.fecha.desc()).limit(10)
+    # Convertir fechas
+    try:
+        desde = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+        hasta = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Formato de fecha inválido (use YYYY-MM-DD).", "danger")
+        return redirect(url_for("app_rutas.liquidaciones"))
 
-    liquidaciones = query.all()
+    # Obtener liquidaciones existentes en ese rango
+    registros = {
+        l.fecha: l for l in Liquidacion.query.filter(
+            Liquidacion.fecha >= desde, Liquidacion.fecha <= hasta
+        ).all()
+    }
+
+    # Generar todas las fechas del rango
+    dias = (hasta - desde).days + 1
+    liquidaciones = []
+    for i in range(dias):
+        fecha = desde + timedelta(days=i)
+        liq = registros.get(fecha)
+
+        if not liq:
+            # Crear un objeto "vacío" para mostrar en tabla
+            liq = Liquidacion(
+                fecha=fecha,
+                caja_manual=0,
+                entradas=0,
+                entradas_caja=0,
+                prestamos_hoy=0,
+                salidas=0,
+                gastos=0,
+                caja=0,
+            )
+        liquidaciones.append(liq)
+
+    # Calcular totales
     total_entradas = sum(l.entradas or 0 for l in liquidaciones)
     total_prestamos = sum(l.prestamos_hoy or 0 for l in liquidaciones)
     total_entradas_caja = sum(l.entradas_caja or 0 for l in liquidaciones)
@@ -1123,6 +1197,8 @@ def liquidaciones():
         total_gastos=total_gastos,
         total_caja=total_caja,
         resumen=resumen,
+        hora_chile=hora_chile,
+        hora_actual=hora_actual,
     )
 
 

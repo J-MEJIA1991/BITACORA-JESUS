@@ -88,7 +88,7 @@
 <!-- ⚙️ Script de eventos -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  // 📘 Mostrar historial de abonos
+  // 📘 Mostrar historial de abonos (versión mejorada y formateada)
   document.querySelectorAll(".saldo-link").forEach((el) => {
     el.addEventListener("click", async () => {
       const id = el.dataset.id;
@@ -97,11 +97,72 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         const resp = await fetch(`/historial_abonos/${id}`);
-        const data = await resp.text();
-        modalBody.innerHTML = data;
+        const data = await resp.json();
+
+        if (!data.ok) {
+          modalBody.innerHTML = `<div class='alert alert-warning text-center'>${data.error || "No se registran abonos para este cliente."}</div>`;
+          new bootstrap.Modal(document.getElementById("modalAbonos")).show();
+          return;
+        }
+
+        const p = data.prestamo;
+
+        // --- Encabezado del préstamo ---
+        let html = `
+          <div class="mb-3">
+            <h5 class="text-center fw-bold text-primary">${p.nombre}</h5>
+            <p class="text-center text-muted mb-1">
+              Fecha inicial: <strong>${p.fecha_inicial}</strong> |
+              Monto: <strong>$${p.monto.toFixed(2)}</strong> |
+              Total: <strong>$${p.total.toFixed(2)}</strong>
+            </p>
+            <p class="text-center text-muted mb-0">
+              Modo: ${p.modo} • Saldo final: <strong>$${p.saldo.toFixed(2)}</strong>
+            </p>
+          </div>
+        `;
+
+        // --- Tabla de abonos ---
+        if (data.abonos.length > 0) {
+          html += `
+            <table class="table table-bordered table-hover align-middle text-center">
+              <thead class="table-dark">
+                <tr>
+                  <th>Código</th>
+                  <th>Fecha</th>
+                  <th>Hora</th>
+                  <th>Monto</th>
+                  <th>Saldo restante</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.abonos.map(a => `
+                  <tr>
+                    <td>${a.codigo}</td>
+                    <td>${a.fecha}</td>
+                    <td>${a.hora}</td>
+                    <td class="text-success fw-bold">$${a.monto.toFixed(2)}</td>
+                    <td class="text-primary fw-bold">$${a.saldo.toFixed(2)}</td>
+                  </tr>`).join("")}
+              </tbody>
+              <tfoot class="table-light fw-bold">
+                <tr>
+                  <td colspan="3" class="text-end">Total abonado:</td>
+                  <td colspan="2" class="text-success">$${data.abonos.reduce((s, a) => s + a.monto, 0).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          `;
+        } else {
+          html += `<div class="alert alert-info text-center">Este cliente no tiene abonos registrados.</div>`;
+        }
+
+        modalBody.innerHTML = html;
         new bootstrap.Modal(document.getElementById("modalAbonos")).show();
-      } catch {
+
+      } catch (err) {
         modalBody.innerHTML = "<p class='text-danger text-center'>Error al cargar los abonos.</p>";
+        console.error("Error cargando historial:", err);
       }
     });
   });
@@ -124,7 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
-            "X-Requested-With": "fetch" // 👈 línea crucial para AJAX
+            "X-Requested-With": "fetch"
           },
           body: new URLSearchParams({ abono: valor }),
         });
@@ -132,14 +193,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await resp.json();
 
         if (data.ok) {
-          // 💫 Animar y eliminar fila
           const fila = document.getElementById(`cliente-${id}`);
           fila.classList.add("table-success");
           fila.style.transition = "opacity 0.8s ease";
           fila.style.opacity = "0";
           setTimeout(() => fila.remove(), 800);
 
-          // ✅ Toast visual
           const toast = document.createElement("div");
           toast.className = "alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3 shadow";
           toast.style.zIndex = 2000;
@@ -147,7 +206,6 @@ document.addEventListener("DOMContentLoaded", () => {
           document.body.appendChild(toast);
           setTimeout(() => toast.remove(), 4000);
 
-          // 📡 (Opcional) Enviar datos al index si está abierto
           if (window.opener) {
             window.opener.postMessage({ tipo: "nuevo_cliente", cliente: data }, "*");
           }
@@ -168,8 +226,29 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+<!-- 🎨 Estilos -->
 <style>
 .abono-td form { align-items: center; justify-content: center; gap: 0.3em; }
 .table-success { background-color: #d1e7dd !important; transition: all 0.6s ease; }
+
+/* 🎨 Historial de abonos — clientes cancelados */
+#modalAbonos table {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+#modalAbonos th {
+  background-color: #0d6efd;
+  color: white;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+
+#modalAbonos tr:hover {
+  background-color: rgba(13, 110, 253, 0.05);
+  transition: 0.3s;
+}
 </style>
 {% endblock %}

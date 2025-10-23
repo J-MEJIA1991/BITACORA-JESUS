@@ -106,9 +106,6 @@ class Cliente(db.Model):
         return float(ultimo_abono.monto or 0.0)
 
 
-# ---------------------------------------------------
-# 💸 PRÉSTAMO
-# ---------------------------------------------------
 class Prestamo(db.Model):
     __tablename__ = "prestamo"
 
@@ -120,6 +117,7 @@ class Prestamo(db.Model):
     fecha = db.Column(db.Date, default=local_date)  # ✅ Fecha local de Chile
     saldo = db.Column(db.Float, default=0.0)
     frecuencia = db.Column(db.String(20), default="diario")
+    ultima_aplicacion_interes = db.Column(db.Date, default=local_date)  # 🕒 Nuevo
 
     # ✅ Relación corregida: elimina abonos al borrar préstamo
     abonos = db.relationship(
@@ -128,7 +126,6 @@ class Prestamo(db.Model):
         cascade="all, delete-orphan",
         lazy=True
     )
-
 
 # ---------------------------------------------------
 # 💰 ABONO

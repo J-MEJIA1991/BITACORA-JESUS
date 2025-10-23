@@ -34,8 +34,14 @@
   </thead>
   <tbody>
     {% for c in clientes %}
-    <tr id="cliente-{{ c.id }}"
-        class="{% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}">
+    {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
+{% set dias_desde = (hoy - u.fecha).days if u and u.fecha else 0 %}
+
+<tr id="cliente-{{ c.id }}"
+    class="
+      {% if u and (u.frecuencia or 'diario') == 'mensual' and dias_desde >= 30 and not c.cancelado %}interes-vencido {% endif %}
+      {% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}
+    ">
 
       <!-- ORDEN -->
       <td style="width:100px;">
@@ -240,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     else alert("❌ " + (data.error || "Error al guardar."));
   });
 
-  // --- Registrar abonos en vivo ---
+// --- Registrar abonos en vivo ---
 const forms = document.querySelectorAll(".form-abono");
 forms.forEach(form => {
   form.addEventListener("submit", async e => {
@@ -260,6 +266,36 @@ forms.forEach(form => {
         playSound(false);
         alert(data.error || "❌ Error al registrar abono.");
         return;
+      }
+
+      // 💡 Si se aplicó un interés mensual, mostrar aviso visual
+      if (data.interes_aplicado) {
+        const fila = document.getElementById(`cliente-${data.cliente_id}`);
+        if (fila) {
+          fila.classList.remove("interes-vencido");
+
+          const alerta = document.createElement("div");
+          alerta.textContent = "💡 Interés aplicado";
+          alerta.style.position = "absolute";
+          alerta.style.backgroundColor = "#d1e7dd";
+          alerta.style.color = "#0f5132";
+          alerta.style.padding = "4px 8px";
+          alerta.style.borderRadius = "6px";
+          alerta.style.fontSize = "0.9em";
+          alerta.style.fontWeight = "bold";
+          alerta.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+          alerta.style.zIndex = "9999";
+
+          const rect = fila.getBoundingClientRect();
+          alerta.style.left = `${rect.left + 100}px`;
+          alerta.style.top = `${rect.top + window.scrollY - 10}px`;
+
+          document.body.appendChild(alerta);
+
+          setTimeout(() => {
+            alerta.remove();
+          }, 2000);
+        }
       }
 
       playSound(true);
@@ -301,36 +337,68 @@ forms.forEach(form => {
     }
   });
 });
-  // --- Historial de abonos ---
-  document.querySelectorAll(".saldo-clickable").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.clienteId;
-      const modal = new bootstrap.Modal(document.getElementById("modalHistorial"));
-      const datos = document.getElementById("tablaDatosPrestamo");
-      const tbody = document.getElementById("tablaHistorialBody");
-      datos.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
-      tbody.innerHTML = `<tr><td colspan="6"><em>Cargando...</em></td></tr>`;
-      try {
-        const res = await fetch(`/historial_abonos/${id}`);
-        const data = await res.json();
-        if (!data.ok) return alert("Error al obtener historial.");
-        const p = data.prestamo;
-        datos.innerHTML = `<tr><td>${p.nombre}</td><td>${p.fecha_inicial}</td><td>$${p.monto.toFixed(2)}</td><td>$${p.total.toFixed(2)}</td><td>$${p.cuota.toFixed(2)}</td><td>${p.modo}</td><td>${p.datos}</td><td>$${p.saldo.toFixed(2)}</td></tr>`;
-        tbody.innerHTML = data.abonos.map(a => 
-          `<tr>
+     // --- Historial de abonos ---
+document.querySelectorAll(".saldo-clickable").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.dataset.clienteId;
+    const modalEl = document.getElementById("modalHistorial");
+    const modal = new bootstrap.Modal(modalEl);
+    const datos = document.getElementById("tablaDatosPrestamo");
+    const tbody = document.getElementById("tablaHistorialBody");
+
+    // 🕓 Mostrar “Cargando” mientras llega la respuesta
+    datos.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><em>Cargando...</em></td></tr>`;
+
+    try {
+      const res = await fetch(`/historial_abonos/${id}`);
+      const data = await res.json();
+
+      // 🧾 Si no hay abonos o préstamo, mostrar mensaje en el modal
+      if (!data.ok) {
+        datos.innerHTML = `<tr><td colspan="8"><em>${data.error || "Este cliente no tiene préstamo registrado."}</em></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6"><em>${data.error || "No se registran abonos para este cliente."}</em></td></tr>`;
+        modal.show();
+        return;
+      }
+
+      // ✅ Si todo está correcto, rellenar el modal
+      const p = data.prestamo;
+      datos.innerHTML = `
+        <tr>
+          <td>${p.nombre}</td>
+          <td>${p.fecha_inicial}</td>
+          <td>$${p.monto.toFixed(2)}</td>
+          <td>$${p.total.toFixed(2)}</td>
+          <td>$${p.cuota.toFixed(2)}</td>
+          <td>${p.modo}</td>
+          <td>${p.datos}</td>
+          <td>$${p.saldo.toFixed(2)}</td>
+        </tr>`;
+
+      tbody.innerHTML = data.abonos.length > 0
+        ? data.abonos.map(a => `
+          <tr>
             <td>${a.codigo}</td>
             <td>${a.fecha}</td>
             <td>${a.hora}</td>
             <td>$${a.monto.toFixed(2)}</td>
             <td>$${a.saldo.toFixed(2)}</td>
-            <td>${a.id>0?`<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${id}">🗑️</button>`:"<span>—</span>"}</td>
-          </tr>`
-        ).join("");
-        modal.show();
-      } catch { alert("Error al cargar historial."); }
-    });
-  });
+            <td>${a.id > 0 ? `<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${id}">🗑️</button>` : "<span>—</span>"}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="6"><em>Este cliente no tiene abonos registrados.</em></td></tr>`;
 
+      modal.show();
+
+    } catch (err) {
+      // ⚠️ Error de conexión o fallo inesperado
+      datos.innerHTML = `<tr><td colspan="8"><em>Error al conectar con el servidor.</em></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6"><em>No se pudo cargar el historial.</em></td></tr>`;
+      modal.show();
+      console.error("Error al cargar historial:", err);
+    }
+  });
+});
   // --- Eliminar abono ---
   document.addEventListener("click", async (e) => {
     if (e.target.classList.contains("eliminar-abono")) {
@@ -373,12 +441,59 @@ forms.forEach(form => {
 
 <!-- =================== ESTILOS =================== -->
 <style>
-.cancelado { background-color: #f8d7da; color: #721c24; }
-.plazo-vencido { background-color: rgba(255,165,0,0.15)!important; }
-.plazo-moroso { background-color: rgba(255,0,0,0.15)!important; }
-.abono-td form { align-items:center; justify-content:center; gap:0.3em; }
-.saldo-clickable { font-size:1em; font-weight:bold; color:#0d6efd; text-decoration:underline; cursor:pointer; }
-.fila-parpadea { animation: parpadeoVerde 1s ease-out; }
-@keyframes parpadeoVerde { 0%{background-color:#d4edda;} 50%{background-color:#b6e0c3;} 100%{background-color:transparent;} }
+/* 🚫 Cliente cancelado */
+.cancelado {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* 🟠 Plazo vencido (en advertencia) */
+.plazo-vencido {
+  background-color: rgba(255,165,0,0.15) !important;
+}
+
+/* 🔴 Plazo moroso (grave) */
+.plazo-moroso {
+  background-color: rgba(255,0,0,0.15) !important;
+}
+
+/* 🔴 Interés mensual vencido */
+.interes-vencido {
+  background-color: rgba(255, 0, 0, 0.1) !important; /* fondo rojo suave */
+  border-left: 4px solid #ff4d4d; /* borde rojo lateral */
+  animation: parpadeoInteres 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes parpadeoInteres {
+  from { background-color: rgba(255, 0, 0, 0.1); }
+  to { background-color: rgba(255, 0, 0, 0.25); }
+}
+
+/* 💰 Celda de abono */
+.abono-td form {
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+}
+
+/* 💵 Saldo clickeable (abre historial) */
+.saldo-clickable {
+  font-size: 1em;
+  font-weight: bold;
+  color: #0d6efd;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ✅ Animación verde al registrar abono */
+.fila-parpadea {
+  animation: parpadeoVerde 1s ease-out;
+}
+
+@keyframes parpadeoVerde {
+  0% { background-color: #d4edda; }
+  50% { background-color: #b6e0c3; }
+  100% { background-color: transparent; }
+}
 </style>
 {% endblock %}
