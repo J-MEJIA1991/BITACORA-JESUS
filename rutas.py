@@ -705,9 +705,9 @@ def registrar_abono_por_codigo():
 # ======================================================
 # 🧾 HISTORIAL DE ABONOS — para modal (vista cancelados)
 # ======================================================
-@app_rutas.route("/historial_abonos/<int:cliente_id>")
+@app_rutas.route("/historial_abonos_html/<int:cliente_id>")
 @login_required
-def historial_abonos(cliente_id):
+def historial_abonos_html(cliente_id):
     """Devuelve el historial de abonos de un cliente en formato HTML para el modal."""
     cliente = Cliente.query.get_or_404(cliente_id)
     prestamo = cliente.prestamos[-1] if cliente.prestamos else None
@@ -719,9 +719,7 @@ def historial_abonos(cliente_id):
     if not abonos:
         return "<p class='text-center text-muted'>No se registran abonos para este cliente.</p>"
 
-    # 🧮 Calcular saldo progresivo
     saldo_actual = prestamo.saldo + sum(a.monto for a in abonos)
-
     html = f"""
     <h5 class="text-center mb-3">Historial de Abonos — {cliente.nombre}</h5>
     <div class="table-responsive">
@@ -737,7 +735,6 @@ def historial_abonos(cliente_id):
         </thead>
         <tbody>
     """
-
     for i, ab in enumerate(abonos, 1):
         fecha = ab.fecha.strftime("%d-%m-%Y")
         hora = ab.fecha.strftime("%H:%M:%S")
@@ -751,14 +748,61 @@ def historial_abonos(cliente_id):
             <td>${saldo_actual:,.2f}</td>
           </tr>
         """
-
-    html += """
-        </tbody>
-      </table>
-    </div>
-    """
-
+    html += "</tbody></table></div>"
     return html
+
+# ======================================================
+# 🧾 HISTORIAL DE ABONOS — versión JSON (para vista principal)
+# ======================================================
+@app_rutas.route("/historial_abonos/<int:cliente_id>")
+@login_required
+def historial_abonos_json(cliente_id):
+    """Devuelve el historial de abonos y datos del préstamo en formato JSON."""
+    from datetime import datetime
+
+    cliente = Cliente.query.get_or_404(cliente_id)
+    prestamo = (
+        Prestamo.query.filter_by(cliente_id=cliente.id)
+        .order_by(Prestamo.id.desc())
+        .first()
+    )
+
+    if not prestamo:
+        return jsonify({"ok": False, "error": "El cliente no tiene préstamos registrados."})
+
+    abonos = sorted(prestamo.abonos, key=lambda a: a.fecha or datetime.min, reverse=True)
+    if not abonos:
+        return jsonify({"ok": False, "error": "No se registran abonos para este cliente."})
+
+    data_abonos = []
+    saldo_actual = prestamo.saldo + sum(a.monto or 0 for a in abonos)
+
+    for ab in abonos:
+        fecha = ab.fecha.strftime("%d-%m-%Y") if ab.fecha else "-"
+        hora = ab.fecha.strftime("%H:%M:%S") if ab.fecha else "-"
+        saldo_actual -= ab.monto or 0
+        data_abonos.append({
+            "id": ab.id,
+            "codigo": cliente.codigo,
+            "fecha": fecha,
+            "hora": hora,
+            "monto": ab.monto or 0,
+            "saldo": saldo_actual
+        })
+
+    data_prestamo = {
+        "nombre": cliente.nombre,
+        "fecha_inicial": prestamo.fecha.strftime("%d-%m-%Y") if prestamo.fecha else "-",
+        "monto": prestamo.monto or 0,
+        "total": prestamo.monto + (prestamo.monto * (prestamo.interes or 0) / 100),
+        "cuota": prestamo.cuota if hasattr(prestamo, "cuota") else 0,
+        "modo": prestamo.frecuencia or "-",
+        "datos": prestamo.detalle if hasattr(prestamo, "detalle") else "-",
+        "saldo": prestamo.saldo or 0,
+    }
+
+    return jsonify({"ok": True, "prestamo": data_prestamo, "abonos": data_abonos})
+
 
 # ======================================================
 # 💵 REGISTRAR ABONO DIRECTO POR CLIENTE
