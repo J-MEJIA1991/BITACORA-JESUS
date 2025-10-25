@@ -13,6 +13,11 @@
   <a class="btn btn-outline-primary" href="{{ url_for('app_rutas.dashboard') }}">📈 Dashboard</a>
 </div>
 
+<!-- =================== BUSCADOR DE CLIENTES =================== -->
+<div class="mb-3">
+  <input type="text" id="buscarCliente" class="form-control" placeholder="🔍 Buscar cliente por nombre...">
+</div>
+
 <!-- =================== TABLA DE CLIENTES =================== -->
 {% if clientes %}
 <table id="tabla-clientes" class="table table-bordered table-hover align-middle text-center">
@@ -38,7 +43,7 @@
 {% set dias_desde = (hoy - u.fecha).days if u and u.fecha else 0 %}
 
 <tr id="cliente-{{ c.id }}"
-    class="
+    class="fila-cliente
       {% if u and (u.frecuencia or 'diario') == 'mensual' and dias_desde >= 30 and not c.cancelado %}interes-vencido {% endif %}
       {% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}
     ">
@@ -54,8 +59,8 @@
       <!-- DATOS PRINCIPALES -->
       <td>{{ c.codigo }}</td>
       <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
-      <td>{{ c.nombre }}</td>
-
+      <td class="nombre-cliente">{{ c.nombre }}</td> 
+      
       <!-- MONTO PRESTADO -->
       <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
 
@@ -435,6 +440,22 @@ document.querySelectorAll(".saldo-clickable").forEach(btn => {
         alert("Error de conexión al eliminar abono.");
       }
     }
+  });
+});
+</script>
+
+<!-- =================== BUSCADOR EN TIEMPO REAL =================== -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const input = document.getElementById("buscarCliente");
+  const filas = document.querySelectorAll(".fila-cliente");
+
+  input.addEventListener("keyup", function() {
+    const texto = this.value.toLowerCase().trim();
+    filas.forEach(fila => {
+      const nombre = fila.querySelector(".nombre-cliente").textContent.toLowerCase();
+      fila.style.display = nombre.includes(texto) ? "" : "none";
+    });
   });
 });
 </script>
