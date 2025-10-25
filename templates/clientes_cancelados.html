@@ -3,7 +3,14 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h2 class="text-center mb-4">📋 Clientes Cancelados</h2>
+  <h2 class="text-center mb-2">📋 Clientes Cancelados</h2>
+
+  {% if total_cancelados is defined %}
+  <p class="text-center text-muted mb-4">
+    🧾 {{ total_cancelados }} clientes cancelados — 
+    <span class="text-success fw-bold">{{ total_renovados }}</span> renovados
+  </p>
+  {% endif %}
 
   <div class="table-responsive">
     <table class="table table-bordered table-hover align-middle text-center">
@@ -27,7 +34,12 @@
           <td>{{ c.codigo }}</td>
           <td>{{ c.dias }}</td>
           <td>{{ c.fecha_salida }}</td>
-          <td>{{ c.nombre }}</td>
+          <td class="{% if c.renovado %}text-success fw-bold{% endif %}">
+            {{ c.nombre }}
+            {% if c.renovado %}
+              <i class="bi bi-check-circle-fill ms-1 text-success"></i>
+            {% endif %}
+          </td>
           <td>${{ "%.2f"|format(c.salida_total) }}</td>
           <td>
             {% if c.ultimo_abono_monto and c.ultimo_abono_monto > 0 %}
@@ -88,7 +100,7 @@
 <!-- ⚙️ Script de eventos -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  // 📘 Mostrar historial de abonos (versión mejorada y formateada)
+  // 📘 Mostrar historial de abonos
   document.querySelectorAll(".saldo-link").forEach((el) => {
     el.addEventListener("click", async () => {
       const id = el.dataset.id;
@@ -106,8 +118,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const p = data.prestamo;
-
-        // --- Encabezado del préstamo ---
         let html = `
           <div class="mb-3">
             <h5 class="text-center fw-bold text-primary">${p.nombre}</h5>
@@ -122,17 +132,12 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         `;
 
-        // --- Tabla de abonos ---
         if (data.abonos.length > 0) {
           html += `
             <table class="table table-bordered table-hover align-middle text-center">
               <thead class="table-dark">
                 <tr>
-                  <th>Código</th>
-                  <th>Fecha</th>
-                  <th>Hora</th>
-                  <th>Monto</th>
-                  <th>Saldo restante</th>
+                  <th>Código</th><th>Fecha</th><th>Hora</th><th>Monto</th><th>Saldo restante</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,8 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   <td colspan="2" class="text-success">$${data.abonos.reduce((s, a) => s + a.monto, 0).toFixed(2)}</td>
                 </tr>
               </tfoot>
-            </table>
-          `;
+            </table>`;
         } else {
           html += `<div class="alert alert-info text-center">Este cliente no tiene abonos registrados.</div>`;
         }
@@ -167,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 💵 Reactivar cliente (sin recargar página)
+  // 💵 Reactivar cliente (sin recargar)
   document.querySelectorAll(".form-abono-cancelado").forEach((form) => {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -199,21 +203,12 @@ document.addEventListener("DOMContentLoaded", () => {
           fila.style.opacity = "0";
           setTimeout(() => fila.remove(), 800);
 
-          const toast = document.createElement("div");
-          toast.className = "alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3 shadow";
-          toast.style.zIndex = 2000;
-          toast.textContent = `✅ ${data.nombre} reactivado con abono $${valor.toFixed(2)}.`;
-          document.body.appendChild(toast);
-          setTimeout(() => toast.remove(), 4000);
-
-          if (window.opener) {
-            window.opener.postMessage({ tipo: "nuevo_cliente", cliente: data }, "*");
-          }
+          mostrarToast(`✅ ${data.nombre} reactivado con abono $${valor.toFixed(2)}.`, "success");
         } else {
-          alert("❌ " + (data.error || "Error al reactivar cliente."));
+          mostrarToast(`⚠️ ${data.error || "Error al reactivar cliente."}`, "warning");
         }
       } catch (err) {
-        alert("❌ Error al conectar con el servidor.");
+        mostrarToast("❌ Error al conectar con el servidor.", "danger");
         console.error("⚠️ Error detallado:", err);
       } finally {
         input.disabled = false;
@@ -223,29 +218,37 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   });
+
+  // 🔔 Función toast flotante
+  function mostrarToast(mensaje, tipo="info") {
+    const colores = { success:"alert-success", warning:"alert-warning", danger:"alert-danger", info:"alert-info" };
+    const toast = document.createElement("div");
+    toast.className = `alert ${colores[tipo]} position-fixed top-0 start-50 translate-middle-x mt-3 shadow`;
+    toast.style.zIndex = 2000;
+    toast.textContent = mensaje;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
 });
 </script>
 
-<!-- 🎨 Estilos -->
 <style>
 .abono-td form { align-items: center; justify-content: center; gap: 0.3em; }
 .table-success { background-color: #d1e7dd !important; transition: all 0.6s ease; }
 
-/* 🎨 Historial de abonos — clientes cancelados */
+/* 🎨 Modal de abonos */
 #modalAbonos table {
   border: 1px solid #dee2e6;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
-
 #modalAbonos th {
   background-color: #0d6efd;
   color: white;
   font-size: 0.85rem;
   letter-spacing: 0.5px;
 }
-
 #modalAbonos tr:hover {
   background-color: rgba(13, 110, 253, 0.05);
   transition: 0.3s;

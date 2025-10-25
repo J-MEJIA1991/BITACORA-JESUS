@@ -1,158 +1,196 @@
+
 {% extends "base.html" %}
-{% block title %}Nuevo Cliente{% endblock %}
+{% block title %}🧾 Nuevo Cliente{% endblock %}
+
 {% block content %}
-<h2>🧾 Nuevo Cliente</h2>
-<p class="text-muted mb-4">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
+<div class="container mt-4 mb-5">
+  <div class="card shadow-lg border-0 rounded-4">
+    <div class="card-body p-4">
 
+      <!-- 🧾 Título -->
+      <h3 class="text-center fw-bold text-primary mb-1">🧾 Nuevo Cliente / Renovación</h3>
+      <p class="text-center text-muted mb-4">🕒 Hora actual: {{ hora_actual() }}</p>
 
-<form id="formCliente" action="{{ url_for('app_rutas.nuevo_cliente') }}" method="post" class="row g-3">
+      <!-- 1️⃣ Primer paso -->
+      <h5 class="text-center fw-bold text-secondary mb-3">1️⃣ Primer Paso: Datos del Cliente</h5>
 
-  <!-- BLOQUE 1: Nombre y Dirección -->
-  <div class="card mb-3 p-3 w-100" id="bloqueNombreDireccion">
-    <div class="row g-3">
-      <div class="col-md-6">
-        <label for="nombre" class="form-label">Nombre</label>
-        <input type="text" class="form-control" id="nombre" name="nombre"
-               placeholder="(solo si el código es nuevo)">
-      </div>
-      <div class="col-md-6">
-        <label for="direccion" class="form-label">Dirección</label>
-        <input type="text" class="form-control" id="direccion" name="direccion"
-               placeholder="(opcional si el cliente ya existe)">
-      </div>
+      <form action="{{ url_for('app_rutas.nuevo_cliente') }}" method="POST" autocomplete="off" id="formCliente">
+
+        <div class="row justify-content-center mb-3">
+          <div class="col-md-5 mb-3">
+            <label class="form-label fw-semibold">Nombre</label>
+            <input type="text" name="nombre" id="nombre" class="form-control text-center" placeholder="Ej: Juan Pérez">
+          </div>
+          <div class="col-md-5 mb-3">
+            <label class="form-label fw-semibold">Dirección</label>
+            <input type="text" name="direccion" id="direccion" class="form-control text-center" placeholder="Ej: Calle 123, Santiago">
+          </div>
+        </div>
+
+        <div class="text-center mb-4">
+          <button type="button" id="btnGenerarCodigo" class="btn btn-primary px-4 py-2 fw-bold">
+            ⚙️ Generar Código
+          </button>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- 2️⃣ Segundo paso -->
+        <h5 class="text-center fw-bold text-secondary mb-3">2️⃣ Segundo Paso: Datos del Préstamo</h5>
+
+        <div class="row justify-content-center g-3 mb-4">
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Código Cliente</label>
+            <input
+              type="text"
+              name="codigo"
+              id="codigo"
+              class="form-control text-center"
+              placeholder="Código generado o existente"
+              required
+              pattern="[0-9]{6}(_R[0-9]+)?"
+              title="Debe tener 6 dígitos o un código de renovación (ej: 101633 o 101633_R1761430834)">
+            <small class="text-muted">Puedes usar un código existente o uno generado arriba</small>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Orden</label>
+            <input type="number" name="orden" id="orden" class="form-control text-center" min="1" placeholder="1" required>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Monto</label>
+            <input type="number" step="0.01" min="0.01" id="monto" name="monto" class="form-control text-center" required>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Interés (%)</label>
+            <input type="number" step="0.01" min="0" id="interes" name="interes" class="form-control text-center" required>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label fw-semibold">Plazo (días)</label>
+            <input type="number" id="plazo" name="plazo" class="form-control text-center" min="1" required>
+          </div>
+        </div>
+
+        <div class="row justify-content-center g-3">
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Frecuencia</label>
+            <select name="frecuencia" id="frecuencia" class="form-select text-center">
+              <option value="diario" selected>Diario</option>
+              <option value="semanal">Semanal</option>
+              <option value="quincenal">Quincenal</option>
+              <option value="mensual">Mensual</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 📊 Panel de cálculo automático -->
+        <div class="mt-5 bg-light border rounded-3 p-3 shadow-sm text-center">
+          <h6 class="fw-bold mb-3 text-muted">📈 Cálculo Automático del Préstamo</h6>
+          <div class="row justify-content-center">
+            <div class="col-md-3">
+              <p class="text-muted mb-0">💵 Total con Interés</p>
+              <h5 id="lblTotal" class="fw-bold text-primary">$0.00</h5>
+            </div>
+            <div class="col-md-3">
+              <p class="text-muted mb-0">📆 Número de Cuotas</p>
+              <h5 id="lblCuotas" class="fw-bold text-dark">0</h5>
+            </div>
+            <div class="col-md-3">
+              <p class="text-muted mb-0">💸 Cuota Estimada</p>
+              <h5 id="lblCuota" class="fw-bold text-success">$0.00</h5>
+            </div>
+          </div>
+        </div>
+
+        <!-- ✅ Botones -->
+        <div class="text-center mt-4">
+          <button type="submit" class="btn btn-success px-4 py-2">💾 Guardar Cliente</button>
+          <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-secondary px-4 py-2">Cancelar</a>
+        </div>
+
+      </form>
     </div>
-    <div class="mt-3">
-      <button type="button" class="btn btn-primary" id="generarCodigoBtn">Generar Código</button>
-    </div>
   </div>
+</div>
 
-  <!-- BLOQUE 2: Datos del préstamo -->
-  <div class="col-md-3">
-    <label for="codigo" class="form-label">Código Cliente</label>
-    <input type="text" class="form-control" id="codigo" name="codigo" 
-           required pattern="\d{6}" title="Debe tener 6 dígitos">
-  </div>
-
-  <div class="col-md-2">
-    <label for="orden" class="form-label">Orden</label>
-    <input type="number" class="form-control" id="orden" name="orden" required min="1">
-  </div>
-
-  <div class="col-md-3">
-    <label for="monto" class="form-label">Monto</label>
-    <input type="number" step="0.01" class="form-control" id="monto" name="monto" required min="1">
-  </div>
-
-  <div class="col-md-2">
-    <label for="plazo" class="form-label">Plazo (días)</label>
-    <input type="number" class="form-control" id="plazo" name="plazo" required min="1">
-  </div>
-
-  <div class="col-md-2">
-    <label for="interes" class="form-label">Interés (%)</label>
-    <input type="number" step="0.01" class="form-control" id="interes" name="interes" required min="0">
-  </div>
-
-  <div class="col-md-3 mt-3">
-    <label for="frecuencia" class="form-label">Frecuencia de Pago</label>
-    <select id="frecuencia" name="frecuencia" class="form-control" required>
-      <option value="diario">Diario</option>
-      <option value="semanal">Semanal</option>
-      <option value="quincenal">Quincenal</option>
-      <option value="mensual">Mensual</option>
-    </select>
-  </div>
-
-  <div class="col-md-3 mt-3">
-    <label for="cuota" class="form-label">Cuotas calculadas</label>
-    <input type="text" id="cuota" class="form-control" readonly>
-  </div>
-
-  <div class="col-12 mt-3">
-    <button type="submit" class="btn btn-success">Guardar Cliente</button>
-    <a href="{{ url_for('app_rutas.index') }}" class="btn btn-secondary">Cancelar</a>
-  </div>
-</form>
-
-<!-- Script -->
+<!-- ⚙️ Script -->
 <script>
-  // 🔢 Generar código numérico aleatorio
-  function generarCodigoNumerico() {
-    let codigo = '';
-    const caracteres = '0123456789';
-    for (let i = 0; i < 6; i++) {
-      codigo += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
-    }
-    return codigo;
-  }
+(function(){
+  const btnGenerarCodigo = document.getElementById("btnGenerarCodigo");
+  const codigo = document.getElementById("codigo");
+  const monto = document.getElementById("monto");
+  const interes = document.getElementById("interes");
+  const plazo = document.getElementById("plazo");
+  const frecuencia = document.getElementById("frecuencia");
+  const lblTotal = document.getElementById("lblTotal");
+  const lblCuotas = document.getElementById("lblCuotas");
+  const lblCuota = document.getElementById("lblCuota");
 
-  // 🧩 Botón "Generar Código"
-  document.getElementById('generarCodigoBtn').addEventListener('click', function() {
-    const nombre = document.getElementById('nombre').value.trim();
-    const direccion = document.getElementById('direccion').value.trim();
+  // 🔢 Generar código aleatorio
+  btnGenerarCodigo.addEventListener("click", () => {
+    let c = "";
+    const chars = "0123456789";
+    for (let i = 0; i < 6; i++) c += chars.charAt(Math.floor(Math.random() * chars.length));
+    codigo.value = c;
+  });
 
-    if (!nombre || !direccion) {
-      alert("Ingresa Nombre y Dirección antes de generar código.");
+  // 💰 Calcular total y cuotas
+  function calcular() {
+    const m = parseFloat(monto.value) || 0;
+    const i = parseFloat(interes.value) || 0;
+    const p = parseInt(plazo.value) || 0;
+    const f = frecuencia.value;
+
+    if (m <= 0 || p <= 0) {
+      lblTotal.textContent = "$0.00";
+      lblCuotas.textContent = "0";
+      lblCuota.textContent = "$0.00";
       return;
     }
 
-    document.getElementById('codigo').value = generarCodigoNumerico();
-  });
-
-  // 🔍 Verificar si el código ya existe y autocompletar
-  document.getElementById('codigo').addEventListener('change', async function() {
-    const codigo = this.value.trim();
-    if (!codigo) return;
-
-    const response = await fetch(`/api/cliente/${codigo}`);
-    const data = await response.json();
-
-    if (data.existe) {
-      document.getElementById('nombre').value = data.nombre;
-      document.getElementById('direccion').value = data.direccion;
-      document.getElementById('bloqueNombreDireccion').style.display = 'none';
-
-      // Mostrar alerta si está cancelado
-      if (data.cancelado) {
-        alert(`⚠️ El cliente "${data.nombre}" está cancelado. Se reactivará al guardar.`);
-      }
-    } else {
-      alert("Código no existe. Puedes crear un nuevo cliente.");
-      document.getElementById('nombre').value = '';
-      document.getElementById('direccion').value = '';
-      document.getElementById('bloqueNombreDireccion').style.display = 'block';
+    const total = m + (m * (i / 100));
+    let cuotas = 0;
+    switch (f) {
+      case "diario": cuotas = p; break;
+      case "semanal": cuotas = Math.ceil(p / 7); break;
+      case "quincenal": cuotas = Math.ceil(p / 15); break;
+      case "mensual": cuotas = Math.ceil(p / 30); break;
     }
+    const valor = total / cuotas;
 
-    calcularCuota();
-  });
-
-  // 💰 Calcular cuotas según monto, plazo y frecuencia
-  function calcularCuota() {
-    const monto = parseFloat(document.getElementById('monto').value) || 0;
-    const plazo = parseInt(document.getElementById('plazo').value) || 0;
-    const frecuencia = document.getElementById('frecuencia').value;
-    let numeroCuotas = 0;
-
-    switch (frecuencia) {
-      case 'diario': numeroCuotas = plazo; break;
-      case 'semanal': numeroCuotas = Math.floor(plazo / 7); break;
-      case 'quincenal': numeroCuotas = Math.floor(plazo / 15); break;
-      case 'mensual': numeroCuotas = Math.floor(plazo / 30); break;
-    }
-
-    const valorCuota = numeroCuotas > 0 ? monto / numeroCuotas : 0;
-    document.getElementById('cuota').value = numeroCuotas > 0
-      ? `${numeroCuotas} cuotas de ${valorCuota.toFixed(2)}`
-      : 'Plazo insuficiente';
+    lblTotal.textContent = "$" + total.toFixed(2);
+    lblCuotas.textContent = cuotas.toString();
+    lblCuota.textContent = "$" + valor.toFixed(2);
   }
 
-  // Recalcular al cambiar valores
-  ['monto', 'plazo', 'frecuencia'].forEach(id => {
-    document.getElementById(id).addEventListener('input', calcularCuota);
-    document.getElementById(id).addEventListener('change', calcularCuota);
+  [monto, interes, plazo, frecuencia].forEach(e => {
+    e.addEventListener("input", calcular);
+    e.addEventListener("change", calcular);
   });
-
-  window.addEventListener('load', calcularCuota);
+})();
 </script>
 
+<style>
+h3, h5 { letter-spacing: 0.5px; }
+.card { background: #fefefe; }
+.form-label { font-weight: 600; color: #444; }
+input.form-control, select.form-select {
+  border-radius: 0.5rem;
+  text-align: center;
+}
+input:focus, select:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.15rem rgba(13,110,253,0.15);
+}
+#btnGenerarCodigo {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+#lblTotal, #lblCuota, #lblCuotas {
+  font-size: 1.2rem;
+}
+</style>
 {% endblock %}

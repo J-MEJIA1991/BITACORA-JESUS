@@ -1,53 +1,151 @@
-{% extends "base.html" %}
-{% block title %}Iniciar Sesión{% endblock %}
 
-{% block content %}
-<div class="container d-flex justify-content-center align-items-center" style="min-height: 100vh;">
-  <div class="card shadow-lg p-4 border-0" style="max-width: 420px; width: 100%; border-radius: 16px;">
-    <div class="text-center mb-4">
-      <h3 class="fw-bold text-primary">🔐 Iniciar Sesión</h3>
-      <p class="text-muted mb-1">Sistema de Préstamos</p>
-      <p class="text-muted">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
-    </div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar sesión | Arquito</title>
+  <style>
+    /* 🌈 Fondo general */
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #0e0e0e;
+      font-family: "Poppins", sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
 
-    <!-- Formulario de Login -->
-    <form action="{{ url_for('app_rutas.login') }}" method="POST" autocomplete="off">
-      <div class="mb-3">
-        <label for="usuario" class="form-label fw-semibold">Usuario</label>
-        <input type="text" name="usuario" id="usuario" class="form-control form-control-lg" placeholder="Tu usuario" required autofocus>
-      </div>
+    /* 🌈 Círculo animado */
+    .circulo {
+      position: absolute;
+      width: 350px;
+      height: 350px;
+      border-radius: 50%;
+      background: linear-gradient(45deg, #FFD700, #007BFF, #FF6600);
+      background-size: 300% 300%;
+      animation: moverColores 6s ease-in-out infinite;
+      filter: blur(70px);
+      z-index: 0;
+    }
 
-      <div class="mb-4">
-        <label for="clave" class="form-label fw-semibold">Contraseña</label>
-        <input type="password" name="clave" id="clave" class="form-control form-control-lg" placeholder="••••••••" required>
-      </div>
+    @keyframes moverColores {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
 
-      <button type="submit" class="btn btn-primary w-100 btn-lg fw-bold shadow-sm">
-        Ingresar
-      </button>
+    /* 🌟 Contenedor principal */
+    .contenedor {
+      z-index: 1;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 4rem;
+      margin-bottom: 0.3em;
+      background: linear-gradient(90deg, #FFD700, #00BFFF, #FF6600);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      animation: brillo 4s linear infinite;
+    }
+
+    @keyframes brillo {
+      0% { filter: brightness(1); }
+      50% { filter: brightness(1.4); }
+      100% { filter: brightness(1); }
+    }
+
+    h2 {
+      margin: 0;
+      font-weight: 300;
+      font-size: 1.5rem;
+      color: #ddd;
+    }
+
+    p {
+      margin-top: 0.7em;
+      color: #ccc;
+    }
+
+    /* 🧾 Formulario */
+    form {
+      margin-top: 2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1em;
+    }
+
+    input {
+      width: 250px;
+      padding: 10px;
+      border: none;
+      border-radius: 25px;
+      outline: none;
+      font-size: 1rem;
+      text-align: center;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    input::placeholder {
+      color: #ddd;
+    }
+
+    button {
+      background: #28a745;
+      border: none;
+      padding: 10px 25px;
+      border-radius: 25px;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #34ce57;
+      transform: scale(1.05);
+    }
+
+    /* 📱 Responsive para móviles */
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 2.8rem;
+      }
+      .circulo {
+        width: 250px;
+        height: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 🌈 Círculo de colores -->
+  <div class="circulo"></div>
+
+  <!-- ✨ Contenido -->
+  <div class="contenedor">
+    <h1>Arquito</h1>
+    <h2>Softwareeeeee</h2>
+    <p>Consulta tu proyecto con nosotros!!</p>
+
+    <!-- 🧾 Formulario -->
+    <form action="{{ url_for('app_rutas.login') }}" method="POST">
+      <input type="text" name="usuario" placeholder="Usuario" required>
+      <input type="password" name="clave" placeholder="Contraseña" required>
+      <button type="submit">Iniciar sesión</button>
     </form>
-
-    <!-- Pie -->
-    <div class="text-center mt-4 text-muted small">
-      <p class="mb-0">Versión 1.0 — Desarrollado por <strong>Manuel Herrera</strong></p>
-    </div>
   </div>
-</div>
-
-<style>
-  body {
-    background: linear-gradient(135deg, #f0f4ff, #e6ebff);
-  }
-  .card {
-    background-color: #ffffff;
-  }
-  .btn-primary {
-    background-color: #0d6efd;
-    border: none;
-    transition: background-color 0.2s ease-in-out;
-  }
-  .btn-primary:hover {
-    background-color: #0b5ed7;
-  }
-</style>
-{% endblock %}
+</body>
+</html>
