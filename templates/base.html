@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body class="bg-light">
+  <!-- 🔝 Barra de navegación -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
     <div class="container-fluid">
       <a class="navbar-brand" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
@@ -19,6 +20,7 @@
     </div>
   </nav>
 
+  <!-- 🧾 Contenido principal -->
   <div class="container mb-5">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -30,62 +32,77 @@
         {% endfor %}
       {% endif %}
     {% endwith %}
-
     {% block content %}{% endblock %}
   </div>
 
+  <!-- 🦶 Pie de página -->
   <footer class="text-center mt-4 text-muted">
     <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos - Desarrollado con ❤️ por Manuel Herrera</small>
   </footer>
 
-  <!-- 🔄 Indicador global de carga con animación -->
+  <!-- 🔄 Overlay de carga -->
   <div id="loadingOverlay"
       class="d-flex justify-content-center align-items-center flex-column text-primary fw-bold"
       style="
-        display:none;
         position:fixed;
         top:0; left:0; right:0; bottom:0;
         background:rgba(255,255,255,0.85);
         z-index:2000;
         opacity:0;
-        transition:opacity 0.3s ease;
+        visibility:hidden;
+        transition:opacity 0.3s ease, visibility 0.3s ease;
+        pointer-events:none;
       ">
     <div class="spinner-border text-primary" style="width:4rem;height:4rem;" role="status"></div>
     <p class="mt-3 fs-5">Procesando...</p>
   </div>
 
-  <!-- ⚙️ Script global del overlay -->
+  <!-- ⚙️ Script estable del overlay -->
   <script>
   document.addEventListener("DOMContentLoaded", () => {
     const overlay = document.getElementById("loadingOverlay");
+    let visible = false;
 
     function mostrar() {
-      overlay.style.display = "flex";
-      requestAnimationFrame(() => overlay.style.opacity = "1");
-    }
-    function ocultar() {
-      overlay.style.opacity = "0";
-      setTimeout(() => overlay.style.display = "none", 300);
+      if (visible) return;
+      visible = true;
+      overlay.style.pointerEvents = "auto";
+      overlay.style.visibility = "visible";
+      overlay.style.opacity = "1";
     }
 
-    // Mostrar al enviar cualquier formulario
+    function ocultar() {
+      visible = false;
+      overlay.style.opacity = "0";
+      overlay.style.visibility = "hidden";
+      overlay.style.pointerEvents = "none";
+    }
+
+    // 🧾 Mostrar al enviar formularios
     document.querySelectorAll("form").forEach(form => {
-      form.addEventListener("submit", mostrar);
+      form.addEventListener("submit", () => {
+        mostrar();
+        setTimeout(ocultar, 10000); // seguridad
+      });
     });
 
-    // Mostrar al hacer clic en cualquier enlace interno
+    // 🔗 Mostrar al hacer clic en enlaces internos
     document.querySelectorAll("a[href]").forEach(link => {
       const href = link.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
-      link.addEventListener("click", () => mostrar());
+      link.addEventListener("click", () => {
+        mostrar();
+        setTimeout(ocultar, 10000);
+      });
     });
 
-    // Exponer funciones globales para uso manual (fetch)
+    // 🌐 Funciones globales para uso manual (fetch)
     window.mostrarProcesando = mostrar;
     window.ocultarProcesando = ocultar;
 
-    // Ocultar automáticamente al cargar
+    // 🧹 Asegurar que esté oculto al inicio
     window.addEventListener("load", ocultar);
+    ocultar();
   });
   </script>
 </body>
