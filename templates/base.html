@@ -1,43 +1,92 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Sistema de Préstamos{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <meta charset="UTF-8">
+  <title>{% block title %}Sistema de Préstamos{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-        <div class="container-fluid">
-            <!-- 🔗 Ajustado: el enlace principal apunta a rutas.index -->
-            <a class="navbar-brand" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
-            <div>
-                <!-- 🔗 Todos los botones actualizados con prefijo 'rutas.' -->
-                <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-light btn-sm me-2">Inicio</a>
-                <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-outline-light btn-sm me-2">Liquidación</a>
-                <a href="{{ url_for('app_rutas.nuevo_cliente') }}" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</a>
-                <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm">Salir</a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mb-5">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-
-        {% block content %}{% endblock %}
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
+      <div>
+        <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-light btn-sm me-2">Inicio</a>
+        <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-outline-light btn-sm me-2">Liquidación</a>
+        <a href="{{ url_for('app_rutas.nuevo_cliente') }}" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</a>
+        <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm">Salir</a>
+      </div>
     </div>
+  </nav>
 
-    <footer class="text-center mt-4 text-muted">
-        <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos - Desarrollado con ❤️ por Manuel Herrera</small>
-    </footer>
+  <div class="container mb-5">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer class="text-center mt-4 text-muted">
+    <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos - Desarrollado con ❤️ por Manuel Herrera</small>
+  </footer>
+
+  <!-- 🔄 Indicador global de carga con animación -->
+  <div id="loadingOverlay"
+      class="d-flex justify-content-center align-items-center flex-column text-primary fw-bold"
+      style="
+        display:none;
+        position:fixed;
+        top:0; left:0; right:0; bottom:0;
+        background:rgba(255,255,255,0.85);
+        z-index:2000;
+        opacity:0;
+        transition:opacity 0.3s ease;
+      ">
+    <div class="spinner-border text-primary" style="width:4rem;height:4rem;" role="status"></div>
+    <p class="mt-3 fs-5">Procesando...</p>
+  </div>
+
+  <!-- ⚙️ Script global del overlay -->
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const overlay = document.getElementById("loadingOverlay");
+
+    function mostrar() {
+      overlay.style.display = "flex";
+      requestAnimationFrame(() => overlay.style.opacity = "1");
+    }
+    function ocultar() {
+      overlay.style.opacity = "0";
+      setTimeout(() => overlay.style.display = "none", 300);
+    }
+
+    // Mostrar al enviar cualquier formulario
+    document.querySelectorAll("form").forEach(form => {
+      form.addEventListener("submit", mostrar);
+    });
+
+    // Mostrar al hacer clic en cualquier enlace interno
+    document.querySelectorAll("a[href]").forEach(link => {
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
+      link.addEventListener("click", () => mostrar());
+    });
+
+    // Exponer funciones globales para uso manual (fetch)
+    window.mostrarProcesando = mostrar;
+    window.ocultarProcesando = ocultar;
+
+    // Ocultar automáticamente al cargar
+    window.addEventListener("load", ocultar);
+  });
+  </script>
 </body>
 </html>
