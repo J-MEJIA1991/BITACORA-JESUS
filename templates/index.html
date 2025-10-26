@@ -110,15 +110,14 @@
           {% endif %}
         </td>
 
-        <!-- ELIMINAR (ahora funciona como editar) -->
-        <td>
-          <button class="btn btn-danger btn-sm editar-btn"
-                  data-id="{{ c.id }}"
-                  data-nombre="{{ c.nombre }}">
-            🗑️ Eliminar
-          </button>
-        </td>
-
+        <!-- 🗑️ ELIMINAR CLIENTE -->
+<td>
+  <button class="btn btn-danger btn-sm eliminar-cliente-btn"
+          data-id="{{ c.id }}"
+          data-nombre="{{ c.nombre }}">
+    🗑️ Eliminar
+  </button>
+</td>
       </tr>
     {% endfor %}
   </tbody>
