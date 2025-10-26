@@ -33,106 +33,98 @@
       <th>Último Abono</th>
       <th>Abonar</th>
       <th>Saldo</th>
-      <th>Editar</th>
-      <th>Eliminar</th>
+      <th>Eliminar</th>  <!-- 👈 solo esta -->
     </tr>
   </thead>
   <tbody>
     {% for c in clientes %}
-    {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
-{% set dias_desde = (hoy - u.fecha).days if u and u.fecha else 0 %}
+      {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
+      {% set dias_desde = (hoy - u.fecha).days if u and u.fecha else 0 %}
 
-<tr id="cliente-{{ c.id }}"
-    class="fila-cliente
-      {% if u and (u.frecuencia or 'diario') == 'mensual' and dias_desde >= 30 and not c.cancelado %}interes-vencido {% endif %}
-      {% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}
-    ">
+      <tr id="cliente-{{ c.id }}"
+          class="fila-cliente
+            {% if u and (u.frecuencia or 'diario') == 'mensual' and dias_desde >= 30 and not c.cancelado %}interes-vencido{% endif %}
+            {% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}
+          ">
 
-      <!-- ORDEN -->
-      <td style="width:100px;">
-        <form action="{{ url_for('app_rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
-          <input type="number" name="orden" value="{{ c.orden }}" class="form-control text-center" style="width:70px;" {% if c.cancelado %}disabled{% endif %}>
-          <button type="submit" class="btn btn-outline-primary ms-1 btn-sm" {% if c.cancelado %}disabled{% endif %}>✔</button>
-        </form>
-      </td>
+        <!-- ORDEN -->
+        <td style="width:100px;">
+          <form action="{{ url_for('app_rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
+            <input type="number" name="orden" value="{{ c.orden }}" class="form-control text-center" style="width:70px;" {% if c.cancelado %}disabled{% endif %}>
+            <button type="submit" class="btn btn-outline-primary ms-1 btn-sm" {% if c.cancelado %}disabled{% endif %}>✔</button>
+          </form>
+        </td>
 
-      <!-- DATOS PRINCIPALES -->
-      <td>{{ c.codigo }}</td>
-      <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
-      <td class="nombre-cliente">{{ c.nombre }}</td> 
-      
-      <!-- MONTO PRESTADO -->
-      <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
+        <!-- DATOS PRINCIPALES -->
+        <td>{{ c.codigo }}</td>
+        <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+        <td class="nombre-cliente">{{ c.nombre }}</td>
 
-      <!-- CUOTA -->
-      <td>
-        {{ "%.2f"|format(c.valor_cuota()) }}
-        {% if c.prestamos %}
-          {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
-          {% if u.frecuencia %}
-            <small class="text-muted">({{ u.frecuencia }})</small>
+        <!-- MONTO PRESTADO -->
+        <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
+
+        <!-- CUOTA -->
+        <td>
+          {{ "%.2f"|format(c.valor_cuota()) }}
+          {% if c.prestamos %}
+            {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
+            {% if u.frecuencia %}
+              <small class="text-muted">({{ u.frecuencia }})</small>
+            {% endif %}
           {% endif %}
-        {% endif %}
-      </td>
+        </td>
 
-      <!-- CUOTAS ATRASADAS -->
-      <td>{{ c.cuotas_atrasadas() }}</td>
+        <!-- CUOTAS ATRASADAS -->
+        <td>{{ c.cuotas_atrasadas() }}</td>
 
-      <!-- ÚLTIMO ABONO -->
-      <td>{{ "%.2f"|format(c.ultimo_abono_monto()) }}</td>
+        <!-- ÚLTIMO ABONO -->
+        <td>{{ "%.2f"|format(c.ultimo_abono_monto()) }}</td>
 
-      <!-- ABONAR -->
-      <td class="abono-td">
-        {% if not c.cancelado %}
-        <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}" 
-              method="post" 
-              class="d-flex justify-content-center form-abono"
-              data-orden="{{ c.orden }}">
-          <input type="hidden" name="codigo" value="{{ c.codigo }}">
-          <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
-                 class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
-                 style="width:120px; height:50px; font-size:1.4rem;" 
-                 required autocomplete="off">
-          <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
-        </form>
-        {% else %}
-          <span class="text-muted">Cancelado</span>
-        {% endif %}
-      </td>
+        <!-- ABONAR -->
+        <td class="abono-td">
+          {% if not c.cancelado %}
+          <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
+                method="post"
+                class="d-flex justify-content-center form-abono"
+                data-orden="{{ c.orden }}">
+            <input type="hidden" name="codigo" value="{{ c.codigo }}">
+            <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
+                   class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
+                   style="width:120px; height:50px; font-size:1.4rem;"
+                   required autocomplete="off">
+            <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
+          </form>
+          {% else %}
+            <span class="text-muted">Cancelado</span>
+          {% endif %}
+        </td>
 
-      <!-- SALDO -->
-      <td>
-        {% if c.cancelado %}
-          <span class="text-muted saldo-texto" data-cliente-id="{{ c.id }}">0.00</span>
-        {% else %}
-          <button class="btn btn-link p-0 saldo-clickable saldo-texto" data-cliente-id="{{ c.id }}">
-            {{ "%.2f"|format(c.saldo_total()) }}
+        <!-- SALDO -->
+        <td>
+          {% if c.cancelado %}
+            <span class="text-muted saldo-texto" data-cliente-id="{{ c.id }}">0.00</span>
+          {% else %}
+            <button class="btn btn-link p-0 saldo-clickable saldo-texto" data-cliente-id="{{ c.id }}">
+              {{ "%.2f"|format(c.saldo_total()) }}
+            </button>
+          {% endif %}
+        </td>
+
+        <!-- ELIMINAR (ahora funciona como editar) -->
+        <td>
+          <button class="btn btn-danger btn-sm editar-btn"
+                  data-id="{{ c.id }}"
+                  data-nombre="{{ c.nombre }}">
+            🗑️ Eliminar
           </button>
-        {% endif %}
-      </td>
+        </td>
 
-      <!-- EDITAR -->
-      <td>
-        <button class="btn btn-outline-primary btn-sm editar-btn" 
-                data-id="{{ c.id }}" 
-                data-nombre="{{ c.nombre }}">
-          ✏️
-        </button>
-      </td>
-
-      <!-- ELIMINAR -->
-      <td>
-        <form action="{{ url_for('app_rutas.eliminar_cliente', cliente_id=c.id) }}" method="post"
-              onsubmit="return confirm('¿Seguro que deseas eliminar este cliente?');">
-          <button type="submit" class="btn btn-danger btn-sm">❌</button>
-        </form>
-      </td>
-    </tr>
+      </tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<div class="alert alert-info text-center">No hay clientes registrados aún.</div>
+  <div class="alert alert-info text-center">No hay clientes registrados aún.</div>
 {% endif %}
 
 <!-- =================== MODAL EDITAR PRÉSTAMO =================== -->
@@ -517,4 +509,74 @@ document.addEventListener("DOMContentLoaded", function() {
   100% { background-color: transparent; }
 }
 </style>
+
+{% if resaltado_id %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const fila = document.querySelector(`#cliente-{{ resaltado_id }}`);
+  if (fila) {
+    fila.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => {
+      const inputAbono = fila.querySelector("input[name='monto']");
+      if (inputAbono) {
+        inputAbono.focus();
+        inputAbono.style.transition = "box-shadow 0.6s ease";
+        inputAbono.style.boxShadow = "0 0 10px rgba(0,123,255,0.6)";
+        setTimeout(() => inputAbono.style.boxShadow = "", 1000);
+      }
+    }, 500);
+  }
+});
+</script>
+{% endif %}
+
+<!-- =================== ELIMINAR CLIENTE SIN RECARGAR =================== -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".eliminar-cliente-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const nombre = btn.dataset.nombre;
+
+      if (!confirm(`¿Seguro que deseas eliminar a ${nombre}? Esta acción no se puede deshacer.`))
+        return;
+
+      try {
+        const res = await fetch(`/eliminar_cliente/${id}`, {
+          method: "POST",
+          headers: { "X-Requested-With": "fetch" }
+        });
+        const data = await res.json();
+
+        if (!data.ok) {
+          alert("❌ " + (data.error || "No se pudo eliminar el cliente."));
+          return;
+        }
+
+        // 💨 Desvanecer fila eliminada
+        const fila = document.getElementById(`cliente-${id}`);
+        if (fila) {
+          fila.style.transition = "opacity 0.5s ease, transform 0.5s ease";
+          fila.style.opacity = "0";
+          fila.style.transform = "translateX(-20px)";
+          setTimeout(() => fila.remove(), 500);
+        }
+
+        // ✅ Mensaje visual
+        const toast = document.createElement("div");
+        toast.className = "alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3 shadow";
+        toast.style.zIndex = 2000;
+        toast.textContent = `🗑️ Cliente ${nombre} eliminado correctamente.`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+
+      } catch (err) {
+        alert("❌ Error al eliminar el cliente.");
+        console.error(err);
+      }
+    });
+  });
+});
+</script>
+
 {% endblock %}

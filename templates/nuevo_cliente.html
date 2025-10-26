@@ -1,93 +1,98 @@
-
 {% extends "base.html" %}
 {% block title %}🧾 Nuevo Cliente{% endblock %}
 
 {% block content %}
 <div class="container mt-4 mb-5">
-  <div class="card shadow-lg border-0 rounded-4">
-    <div class="card-body p-4">
+  <!-- 🔹 Marco azul exterior -->
+  <div class="card shadow-lg border border-primary border-3 rounded-4">
+    <div class="card-body p-4 position-relative">
+
+      <!-- 🔴 Botón cerrar (redirige al index) -->
+      <a href="{{ url_for('app_rutas.index') }}" 
+         class="btn btn-danger btn-sm fw-bold position-absolute top-0 end-0 m-3">
+        ✖ Cerrar
+      </a>
 
       <!-- 🧾 Título -->
       <h3 class="text-center fw-bold text-primary mb-1">🧾 Nuevo Cliente / Renovación</h3>
       <p class="text-center text-muted mb-4">🕒 Hora actual: {{ hora_actual() }}</p>
 
-      <!-- 1️⃣ Primer paso -->
-      <h5 class="text-center fw-bold text-secondary mb-3">1️⃣ Primer Paso: Datos del Cliente</h5>
-
       <form action="{{ url_for('app_rutas.nuevo_cliente') }}" method="POST" autocomplete="off" id="formCliente">
 
-        <div class="row justify-content-center mb-3">
-          <div class="col-md-5 mb-3">
-            <label class="form-label fw-semibold">Nombre</label>
-            <input type="text" name="nombre" id="nombre" class="form-control text-center" placeholder="Ej: Juan Pérez">
+        <!-- 1️⃣ PRIMER PASO -->
+        <div class="p-4 mb-4 rounded-3 border border-primary bg-light">
+          <h5 class="text-center fw-bold text-secondary mb-3">1️⃣ Primer Paso: Datos del Cliente</h5>
+          <div class="row justify-content-center mb-3">
+            <div class="col-md-5 mb-3">
+              <label class="form-label fw-semibold">Nombre</label>
+              <input type="text" name="nombre" id="nombre" class="form-control text-center" placeholder="Ej: Juan Pérez">
+            </div>
+            <div class="col-md-5 mb-3">
+              <label class="form-label fw-semibold">Dirección</label>
+              <input type="text" name="direccion" id="direccion" class="form-control text-center" placeholder="Ej: Calle 123, Santiago">
+            </div>
           </div>
-          <div class="col-md-5 mb-3">
-            <label class="form-label fw-semibold">Dirección</label>
-            <input type="text" name="direccion" id="direccion" class="form-control text-center" placeholder="Ej: Calle 123, Santiago">
-          </div>
-        </div>
-
-        <div class="text-center mb-4">
-          <button type="button" id="btnGenerarCodigo" class="btn btn-primary px-4 py-2 fw-bold">
-            ⚙️ Generar Código
-          </button>
-        </div>
-
-        <hr class="my-4">
-
-        <!-- 2️⃣ Segundo paso -->
-        <h5 class="text-center fw-bold text-secondary mb-3">2️⃣ Segundo Paso: Datos del Préstamo</h5>
-
-        <div class="row justify-content-center g-3 mb-4">
-          <div class="col-md-3">
-            <label class="form-label fw-semibold">Código Cliente</label>
-            <input
-              type="text"
-              name="codigo"
-              id="codigo"
-              class="form-control text-center"
-              placeholder="Código generado o existente"
-              required
-              pattern="[0-9]{6}(_R[0-9]+)?"
-              title="Debe tener 6 dígitos o un código de renovación (ej: 101633 o 101633_R1761430834)">
-            <small class="text-muted">Puedes usar un código existente o uno generado arriba</small>
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label fw-semibold">Orden</label>
-            <input type="number" name="orden" id="orden" class="form-control text-center" min="1" placeholder="1" required>
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label fw-semibold">Monto</label>
-            <input type="number" step="0.01" min="0.01" id="monto" name="monto" class="form-control text-center" required>
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label fw-semibold">Interés (%)</label>
-            <input type="number" step="0.01" min="0" id="interes" name="interes" class="form-control text-center" required>
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label fw-semibold">Plazo (días)</label>
-            <input type="number" id="plazo" name="plazo" class="form-control text-center" min="1" required>
+          <div class="text-center">
+            <button type="button" id="btnGenerarCodigo" class="btn btn-primary px-4 py-2 fw-bold">
+              ⚙️ Generar Código
+            </button>
           </div>
         </div>
 
-        <div class="row justify-content-center g-3">
-          <div class="col-md-3">
-            <label class="form-label fw-semibold">Frecuencia</label>
-            <select name="frecuencia" id="frecuencia" class="form-select text-center">
-              <option value="diario" selected>Diario</option>
-              <option value="semanal">Semanal</option>
-              <option value="quincenal">Quincenal</option>
-              <option value="mensual">Mensual</option>
-            </select>
+        <!-- 2️⃣ SEGUNDO PASO -->
+        <div class="p-4 mb-4 rounded-3 border border-primary bg-light">
+          <h5 class="text-center fw-bold text-secondary mb-3">2️⃣ Segundo Paso: Datos del Préstamo</h5>
+          <div class="row justify-content-center g-3 mb-4">
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Código Cliente</label>
+              <input
+                type="text"
+                name="codigo"
+                id="codigo"
+                class="form-control text-center"
+                placeholder="Código generado o existente"
+                required
+                pattern="[0-9]{6}(_R[0-9]+)?"
+                title="Debe tener 6 dígitos o un código de renovación (ej: 101633 o 101633_R1761430834)">
+              <small class="text-muted">Puedes usar un código existente o uno generado arriba</small>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Orden</label>
+              <input type="number" name="orden" id="orden" class="form-control text-center" min="1" placeholder="1" required>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Monto</label>
+              <input type="number" step="0.01" min="0.01" id="monto" name="monto" class="form-control text-center" required>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Interés (%)</label>
+              <input type="number" step="0.01" min="0" id="interes" name="interes" class="form-control text-center" required>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label fw-semibold">Plazo (días)</label>
+              <input type="number" id="plazo" name="plazo" class="form-control text-center" min="1" required>
+            </div>
+          </div>
+
+          <div class="row justify-content-center g-3">
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Frecuencia</label>
+              <select name="frecuencia" id="frecuencia" class="form-select text-center">
+                <option value="diario" selected>Diario</option>
+                <option value="semanal">Semanal</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <!-- 📊 Panel de cálculo automático -->
-        <div class="mt-5 bg-light border rounded-3 p-3 shadow-sm text-center">
+        <!-- 📊 CÁLCULO AUTOMÁTICO -->
+        <div class="p-4 mb-4 rounded-3 border border-primary bg-light text-center">
           <h6 class="fw-bold mb-3 text-muted">📈 Cálculo Automático del Préstamo</h6>
           <div class="row justify-content-center">
             <div class="col-md-3">
@@ -105,10 +110,9 @@
           </div>
         </div>
 
-        <!-- ✅ Botones -->
+        <!-- ✅ BOTÓN GUARDAR -->
         <div class="text-center mt-4">
           <button type="submit" class="btn btn-success px-4 py-2">💾 Guardar Cliente</button>
-          <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-secondary px-4 py-2">Cancelar</a>
         </div>
 
       </form>
@@ -129,7 +133,6 @@
   const lblCuotas = document.getElementById("lblCuotas");
   const lblCuota = document.getElementById("lblCuota");
 
-  // 🔢 Generar código aleatorio
   btnGenerarCodigo.addEventListener("click", () => {
     let c = "";
     const chars = "0123456789";
@@ -137,20 +140,17 @@
     codigo.value = c;
   });
 
-  // 💰 Calcular total y cuotas
   function calcular() {
     const m = parseFloat(monto.value) || 0;
     const i = parseFloat(interes.value) || 0;
     const p = parseInt(plazo.value) || 0;
     const f = frecuencia.value;
-
     if (m <= 0 || p <= 0) {
       lblTotal.textContent = "$0.00";
       lblCuotas.textContent = "0";
       lblCuota.textContent = "$0.00";
       return;
     }
-
     const total = m + (m * (i / 100));
     let cuotas = 0;
     switch (f) {
@@ -160,7 +160,6 @@
       case "mensual": cuotas = Math.ceil(p / 30); break;
     }
     const valor = total / cuotas;
-
     lblTotal.textContent = "$" + total.toFixed(2);
     lblCuotas.textContent = cuotas.toString();
     lblCuota.textContent = "$" + valor.toFixed(2);

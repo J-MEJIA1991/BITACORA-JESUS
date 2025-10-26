@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
+
 <body class="bg-light">
   <!-- 🔝 Barra de navegación -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
@@ -14,7 +15,10 @@
       <div>
         <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-light btn-sm me-2">Inicio</a>
         <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-outline-light btn-sm me-2">Liquidación</a>
-        <a href="{{ url_for('app_rutas.nuevo_cliente') }}" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</a>
+
+        <!-- 🆕 Botón de Nuevo Cliente (abre modal) -->
+        <button id="btnNuevoCliente" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</button>
+
         <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm">Salir</a>
       </div>
     </div>
@@ -40,69 +44,105 @@
     <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos - Desarrollado con ❤️ por Manuel Herrera</small>
   </footer>
 
-  <!-- 🔄 Overlay de carga -->
-  <div id="loadingOverlay"
-      class="d-flex justify-content-center align-items-center flex-column text-primary fw-bold"
-      style="
-        position:fixed;
-        top:0; left:0; right:0; bottom:0;
-        background:rgba(255,255,255,0.85);
-        z-index:2000;
-        opacity:0;
-        visibility:hidden;
-        transition:opacity 0.3s ease, visibility 0.3s ease;
-        pointer-events:none;
-      ">
-    <div class="spinner-border text-primary" style="width:4rem;height:4rem;" role="status"></div>
-    <p class="mt-3 fs-5">Procesando...</p>
+  <!-- 🔄 Toast “Procesando...” flotante -->
+  <div id="toastProcesando"
+       style="display:none; position:fixed; top:20px; right:20px; z-index:3000;
+              background:rgba(0,0,0,0.85); color:white; padding:10px 18px;
+              border-radius:10px; font-size:0.9rem; box-shadow:0 2px 10px rgba(0,0,0,0.3);
+              opacity:0; transition:opacity 0.3s ease;">
+    ⏳ Procesando...
   </div>
 
-  <!-- ⚙️ Script estable del overlay -->
+  <!-- 💬 Modal de Nuevo Cliente -->
+  <div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-labelledby="nuevoClienteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title fw-bold">🧾 Nuevo Cliente / Renovación</h5>
+          <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">Cerrar ✖</button>
+        </div>
+        <div class="modal-body" id="modalNuevoClienteBody">
+          <div class="text-center text-muted py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3">Cargando formulario...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⚙️ Script unificado -->
   <script>
   document.addEventListener("DOMContentLoaded", () => {
-    const overlay = document.getElementById("loadingOverlay");
+    const toast = document.getElementById("toastProcesando");
     let visible = false;
 
-    function mostrar() {
+    // ==================== FUNCIONES GLOBALES ====================
+    function mostrarProcesando() {
       if (visible) return;
       visible = true;
-      overlay.style.pointerEvents = "auto";
-      overlay.style.visibility = "visible";
-      overlay.style.opacity = "1";
+      toast.style.display = "block";
+      setTimeout(() => (toast.style.opacity = "1"), 50);
     }
 
-    function ocultar() {
+    function ocultarProcesando() {
       visible = false;
-      overlay.style.opacity = "0";
-      overlay.style.visibility = "hidden";
-      overlay.style.pointerEvents = "none";
+      toast.style.opacity = "0";
+      setTimeout(() => (toast.style.display = "none"), 300);
     }
 
-    // 🧾 Mostrar al enviar formularios
+    window.mostrarProcesando = mostrarProcesando;
+    window.ocultarProcesando = ocultarProcesando;
+
+    // ==================== FORMULARIOS ====================
     document.querySelectorAll("form").forEach(form => {
       form.addEventListener("submit", () => {
-        mostrar();
-        setTimeout(ocultar, 10000); // seguridad
+        mostrarProcesando();
+        setTimeout(ocultarProcesando, 8000);
       });
     });
 
-    // 🔗 Mostrar al hacer clic en enlaces internos
+    // ==================== ENLACES ====================
     document.querySelectorAll("a[href]").forEach(link => {
       const href = link.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
       link.addEventListener("click", () => {
-        mostrar();
-        setTimeout(ocultar, 10000);
+        mostrarProcesando();
+        setTimeout(ocultarProcesando, 8000);
       });
     });
 
-    // 🌐 Funciones globales para uso manual (fetch)
-    window.mostrarProcesando = mostrar;
-    window.ocultarProcesando = ocultar;
+    // ==================== MODAL NUEVO CLIENTE ====================
+    const modalNuevoCliente = new bootstrap.Modal(document.getElementById("modalNuevoCliente"));
+    const modalBody = document.getElementById("modalNuevoClienteBody");
+    const btnNuevoCliente = document.getElementById("btnNuevoCliente");
 
-    // 🧹 Asegurar que esté oculto al inicio
-    window.addEventListener("load", ocultar);
-    ocultar();
+    btnNuevoCliente.addEventListener("click", async () => {
+      modalBody.innerHTML = `
+        <div class="text-center text-muted py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-3">Cargando formulario...</p>
+        </div>`;
+      modalNuevoCliente.show();
+
+      try {
+        mostrarProcesando();
+        const resp = await fetch("{{ url_for('app_rutas.nuevo_cliente') }}");
+        const html = await resp.text();
+        modalBody.innerHTML = html;
+      } catch (err) {
+        modalBody.innerHTML = `
+          <div class="alert alert-danger text-center mt-3">
+            ❌ Error al cargar el formulario. Intenta nuevamente.
+          </div>`;
+        console.error("Error cargando formulario:", err);
+      } finally {
+        ocultarProcesando();
+      }
+    });
+
+    // Ocultar al cargar la página
+    window.addEventListener("load", ocultarProcesando);
   });
   </script>
 </body>
