@@ -1,12 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Historial de Liquidaciones{% endblock %}
+{% block title %}📜 Historial de Liquidaciones{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
   <h2 class="text-center mb-4">📜 Historial de Liquidaciones</h2>
-  <p class="text-center text-muted mb-3">🕒 Hora actual en Chile: {{ hora_chile(hora_actual()) }}</p>
+  <p class="text-center text-muted mb-3">
+    🕒 Hora actual en Chile: {{ hora_chile(hora_actual()) }}
+  </p>
 
-  <!-- FORMULARIO DE BÚSQUEDA -->
+  <!-- 🔍 FORMULARIO DE BÚSQUEDA -->
   <form method="get" class="row g-3 mb-4 justify-content-center">
     <div class="col-md-3">
       <label for="desde" class="form-label">Desde</label>
@@ -27,69 +29,77 @@
   </p>
   {% endif %}
 
-  <!-- TABLA DE LIQUIDACIONES -->
+  <!-- 📋 TABLA DE LIQUIDACIONES -->
   <div class="table-responsive">
     <table class="table table-bordered table-hover align-middle text-center">
       <thead class="table-dark">
         <tr>
-          <th>Fecha</th>
-          <th>Caja Anterior</th>
-          <th>Ingresos (Abonos)</th>
-          <th>Entradas Caja</th>
-          <th>Préstamos</th>
-          <th>Salidas</th>
-          <th>Gastos</th>
-          <th>Caja Final</th>
+          <th>📅 Fecha</th>
+          <th>💼 Caja Anterior</th>
+          <th>💰 Ingresos (Abonos)</th>
+          <th>💵 Entradas Caja</th>
+          <th>🏦 Préstamos</th>
+          <th>💸 Salidas</th>
+          <th>🧾 Gastos</th>
+          <th>💰 Caja Final</th>
         </tr>
       </thead>
       <tbody>
         {% if liquidaciones %}
           {% for liq in liquidaciones %}
           <tr>
+            <!-- 📅 Fecha -->
             <td>{{ liq.fecha.strftime("%d-%m-%Y") }}</td>
+
+            <!-- 💼 Caja anterior -->
             <td>${{ "%.2f"|format(liq.caja_manual or 0) }}</td>
 
-            <!-- 💰 Clickable: Ingresos (abonos) -->
+            <!-- 💰 Ingresos (Abonos) -->
             <td>
-              <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='entrada', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
-                 class="text-decoration-none text-success fw-bold hover-underline">
-                ${{ "%.2f"|format(liq.entradas or 0) }}
+              <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='abono', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
+                 class="text-decoration-none text-success fw-bold hover-underline"
+                 title="Ver abonos del día">
+                💰 ${{ "%.2f"|format(liq.entradas or 0) }}
               </a>
             </td>
 
-            <!-- 💵 Clickable: Entradas manuales -->
+            <!-- 💵 Entradas manuales -->
             <td>
               <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='entrada_manual', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
-                 class="text-decoration-none text-info fw-bold hover-underline">
-                ${{ "%.2f"|format(liq.entradas_caja or 0) }}
+                 class="text-decoration-none text-info fw-bold hover-underline"
+                 title="Ver entradas manuales">
+                💵 ${{ "%.2f"|format(liq.entradas_caja or 0) }}
               </a>
             </td>
 
-            <!-- 🏦 Clickable: Préstamos -->
+            <!-- 🏦 Préstamos -->
             <td>
               <a href="{{ url_for('app_rutas.prestamos_por_dia', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
-                 class="text-decoration-none text-primary fw-bold hover-underline">
-                ${{ "%.2f"|format(liq.prestamos_hoy or 0) }}
+                 class="text-decoration-none text-primary fw-bold hover-underline"
+                 title="Ver préstamos otorgados">
+                🏦 ${{ "%.2f"|format(liq.prestamos_hoy or 0) }}
               </a>
             </td>
 
-            <!-- 💸 Clickable: Salidas -->
+            <!-- 💸 Salidas -->
             <td>
               <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='salida', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
-                 class="text-decoration-none text-warning fw-bold hover-underline">
-                ${{ "%.2f"|format(liq.salidas or 0) }}
+                 class="text-decoration-none text-warning fw-bold hover-underline"
+                 title="Ver salidas de efectivo">
+                💸 ${{ "%.2f"|format(liq.salidas or 0) }}
               </a>
             </td>
 
-            <!-- 🧾 Clickable: Gastos -->
+            <!-- 🧾 Gastos -->
             <td>
               <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='gasto', fecha=liq.fecha.strftime('%Y-%m-%d')) }}"
-                 class="text-decoration-none text-danger fw-bold hover-underline">
-                ${{ "%.2f"|format(liq.gastos or 0) }}
+                 class="text-decoration-none text-danger fw-bold hover-underline"
+                 title="Ver gastos del día">
+                🧾 ${{ "%.2f"|format(liq.gastos or 0) }}
               </a>
             </td>
 
-            <!-- 💼 Caja Final -->
+            <!-- 💰 Caja final -->
             {% if (liq.caja or 0) >= 0 %}
               <td class="text-success"><strong>${{ "%.2f"|format(liq.caja or 0) }}</strong></td>
             {% else %}
@@ -98,7 +108,7 @@
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="8">No hay liquidaciones en el rango seleccionado.</td></tr>
+          <tr><td colspan="8" class="text-muted">No hay liquidaciones en el rango seleccionado.</td></tr>
         {% endif %}
       </tbody>
 
@@ -119,23 +129,34 @@
     </table>
   </div>
 
+  <!-- 🔙 Volver -->
   <div class="mt-3 text-center">
-    <!-- ✅ Corregido el prefijo -->
-    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-secondary">⬅️ Volver a Liquidación del Día</a>
+    <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-secondary">
+      ⬅️ Volver a Liquidación del Día
+    </a>
   </div>
 </div>
 
+<!-- 🎨 Estilos adicionales -->
 <style>
-  .table td, .table th { vertical-align: middle; }
+  .table td, .table th {
+    vertical-align: middle;
+  }
+
   .text-success strong { color: #198754; }
   .text-danger strong { color: #dc3545; }
   .text-warning strong { color: #ffc107; }
   .text-primary strong { color: #0d6efd; }
 
-  /* ✨ Hover clickables */
   .hover-underline:hover {
     text-decoration: underline;
     opacity: 0.9;
+    cursor: pointer;
+  }
+
+  .btn-secondary {
+    border-radius: 10px;
+    padding: 8px 18px;
   }
 </style>
 {% endblock %}
