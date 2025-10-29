@@ -304,16 +304,16 @@ def logout():
     return redirect(url_for("app_rutas.login"))
 
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (versión FINAL estable)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (versión FINAL — preserva histórico)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
 def nuevo_cliente():
     """
     Crea un cliente nuevo o renueva uno cancelado sin eliminar su historial.
-    - Si el cliente no existe → se crea normalmente.
-    - Si existe y está cancelado → se reactiva el mismo cliente (mismo código).
-    - Si existe y está activo → se muestra advertencia.
+    - Si no existe → se crea normalmente.
+    - Si existe y está cancelado → se CREA UN NUEVO REGISTRO ACTIVO (el viejo queda en cancelados).
+    - Si existe y está activo → advertencia.
     """
     from datetime import timedelta
 
@@ -341,30 +341,35 @@ def nuevo_cliente():
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ------------------------------------------------------
-            # 🔍 Buscar cliente existente
+            # 🔍 Buscar cliente existente por código
             # ------------------------------------------------------
             cliente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ------------------------------------------------------
-            # 🔁 Si el cliente existe y está cancelado → REACTIVAR
+            # 🔁 Si existe y está CANCELADO → CLONAR A UNO NUEVO (no reactivar el mismo)
             # ------------------------------------------------------
             if cliente and cliente.cancelado:
-                cliente.cancelado = False
-                cliente.nombre = nombre or cliente.nombre
-                cliente.direccion = direccion or cliente.direccion
-                cliente.telefono = telefono or cliente.telefono
-                cliente.orden = orden or cliente.orden
-                cliente.fecha_creacion = local_date()
-                cliente.ultimo_abono_fecha = None
-                cliente.saldo = 0
+                # ⚠️ NO cambiar cliente.cancelado; se preserva histórico
+                # 🆕 Crear NUEVO cliente activo con los mismos datos base
+                nuevo = Cliente(
+                    nombre=nombre or cliente.nombre or codigo,
+                    codigo=cliente.codigo,          # mismo código para continuidad (si tu DB lo permite)
+                    direccion=direccion or cliente.direccion or "",
+                    telefono=telefono or cliente.telefono or "",
+                    orden=orden or cliente.orden or 0,
+                    fecha_creacion=local_date(),
+                    ultimo_abono_fecha=None,
+                    saldo=0.0,
+                    cancelado=False,
+                )
+                db.session.add(nuevo)
+                db.session.flush()  # obtener nuevo.id
 
-                db.session.flush()  # sincroniza antes de crear préstamo
-
-                # 💰 Crear nuevo préstamo
+                # 💰 Crear préstamo si hay monto
                 if monto > 0:
                     saldo_total = monto + (monto * (interes / 100.0))
-                    nuevo_prestamo = Prestamo(
-                        cliente_id=cliente.id,
+                    prestamo = Prestamo(
+                        cliente_id=nuevo.id,
                         monto=monto,
                         saldo=saldo_total,
                         fecha=local_date(),
@@ -375,28 +380,32 @@ def nuevo_cliente():
                     mov = MovimientoCaja(
                         tipo="prestamo",
                         monto=monto,
-                        descripcion=f"Renovación del préstamo para {cliente.nombre}",
+                        descripcion=f"Renovación del préstamo para {nuevo.nombre}",
                         fecha=hora_actual(),
                     )
-                    cliente.saldo = saldo_total
-                    db.session.add_all([nuevo_prestamo, mov])
+                    nuevo.saldo = saldo_total
+                    db.session.add_all([prestamo, mov])
+
+                # 🧷 Aseguramos que el viejo quede como histórico (por si acaso)
+                #    (no cambiamos cancelado=False en el viejo)
+                cliente.ultimo_abono_fecha = cliente.ultimo_abono_fecha or hora_actual()
 
                 db.session.commit()
                 if monto > 0:
                     actualizar_liquidacion_por_movimiento(local_date())
 
-                flash(f"Cliente {cliente.nombre} renovado correctamente con el mismo código.", "success")
-                return redirect(url_for("app_rutas.index", focus_abono=cliente.id))
+                flash(f"Cliente {nuevo.nombre} renovado correctamente (histórico preservado).", "success")
+                return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
             # ------------------------------------------------------
-            # 🚫 Si el cliente ya existe y está activo → advertencia
+            # 🚫 Si ya existe y está ACTIVO → advertencia
             # ------------------------------------------------------
             if cliente and not cliente.cancelado:
                 flash("Ese código ya pertenece a un cliente activo.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ------------------------------------------------------
-            # 🧍‍♂️ Crear cliente nuevo (no existe)
+            # 🧍‍♂️ Crear cliente NUEVO (no existe)
             # ------------------------------------------------------
             nuevo = Cliente(
                 nombre=nombre or codigo,
@@ -454,22 +463,20 @@ def nuevo_cliente():
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
 
+
 # ======================================================
-# 📋 CLIENTES CANCELADOS — VISTA PRINCIPAL (versión final corregida)
+# 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
 # ======================================================
 @app_rutas.route("/clientes_cancelados")
 @login_required
 def clientes_cancelados_view():
     """
     Muestra todos los clientes cancelados (cancelado=True y saldo=0),
-    con su historial y una marca verde si ya fueron renovados.
-    Se considera 'renovado' solo si:
-      - tiene más de un préstamo registrado, o
-      - el último préstamo fue creado después de su última fecha de abono.
+    conservando el histórico y marcando en verde los que fueron renovados.
+    Se considera 'renovado' si existe otro cliente activo con el mismo código.
     """
     from datetime import datetime
 
-    # 🔍 Obtener los clientes cancelados
     clientes_cancelados = (
         Cliente.query
         .filter(Cliente.cancelado == True, Cliente.saldo <= 0.01)
@@ -486,16 +493,16 @@ def clientes_cancelados_view():
         fecha_salida = c.ultimo_abono_fecha or prestamo.fecha
         salida_total = prestamo.monto + (prestamo.monto * (prestamo.interes or 0) / 100)
         ultimo_abono_monto = 0.0
-        renovado = False
 
-        # ✅ Determinar si fue renovado (corregido)
-        if len(c.prestamos) > 1:
-            renovado = True
-        elif c.ultimo_abono_fecha and prestamo.fecha > c.ultimo_abono_fecha:
-            renovado = True
+        # 💚 Nuevo criterio de renovación:
+        # existe otro cliente activo con el mismo código
+        renovado = Cliente.query.filter(
+            Cliente.codigo == c.codigo,
+            Cliente.cancelado == False,
+            Cliente.id != c.id
+        ).first() is not None
 
         # 🧮 Días de duración
-        dias = 0
         try:
             dias = (fecha_salida - prestamo.fecha).days if fecha_salida else 0
         except TypeError:
@@ -519,11 +526,9 @@ def clientes_cancelados_view():
             "renovado": renovado,
         })
 
-    # Totales generales
     total_cancelados = len(data)
     total_renovados = sum(1 for c in data if c["renovado"])
 
-    # 🖥️ Renderizar plantilla
     return render_template(
         "clientes_cancelados.html",
         clientes=data,
@@ -531,142 +536,154 @@ def clientes_cancelados_view():
         total_renovados=total_renovados
     )
 
+
+# ======================================================
+# 🧹 LIMPIAR CLIENTES CANCELADOS (versión FINAL mejorada)
+# ======================================================
 @app_rutas.route("/limpiar_cancelados")
 @login_required
 def limpiar_cancelados():
-    limite = datetime.utcnow() - timedelta(days=180)
-    prestamos_viejos = Prestamo.query.filter(
-        Prestamo.saldo <= 0,
-        Prestamo.fecha < limite
-    ).delete(synchronize_session=False)
-    db.session.commit()
-    flash(f"🧹 Se limpiaron {prestamos_viejos} préstamos antiguos.", "info")
-    return redirect(url_for("app_rutas.clientes_view", estado="cancelados"))
+    """
+    Elimina préstamos antiguos con saldo cero (más de 180 días),
+    manteniendo la base de datos limpia sin afectar registros recientes.
+    """
+    from datetime import timedelta
+
+    try:
+        # 🗓️ Fecha límite (hace 180 días desde hoy)
+        limite = local_date() - timedelta(days=180)
+
+        # 🧾 Buscar y eliminar préstamos viejos cancelados o liquidados
+        prestamos_viejos = Prestamo.query.filter(
+            Prestamo.saldo <= 0,
+            Prestamo.fecha < limite
+        ).delete(synchronize_session=False)
+
+        db.session.commit()
+        flash(f"🧹 Se limpiaron {prestamos_viejos} préstamos antiguos (anteriores a {limite.strftime('%d/%m/%Y')}).", "info")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR limpiar_cancelados] {e}")
+        flash("⚠️ Error al intentar limpiar los préstamos antiguos.", "danger")
+
+    return redirect(url_for("app_rutas.clientes_cancelados_view"))
+
+
 
 # ======================================================
-# 🔁 REACTIVAR CLIENTE DESDE CANCELADOS (versión FINAL — estable y corregida)
+# 🔁 REACTIVAR CLIENTE DESDE CANCELADOS (versión FINAL — histórico preservado y estructura original + corrección ORM)
 # ======================================================
 @app_rutas.route("/reactivar_cliente/<int:cliente_id>", methods=["POST"])
 @login_required
 def reactivar_cliente(cliente_id):
     """
-    Reactiva un cliente cancelado (lo pasa a activos).
-    - Solo bloquea si existe OTRO cliente activo con el mismo código.
-    - Permite reactivar aunque tenga abonos antiguos.
-    - Si se ingresa una deuda, se suma a su saldo y se registra movimiento en caja.
-    - Si no tiene préstamos, crea uno base (para que aparezca en el listado principal).
+    Reactiva un cliente cancelado, dejando su registro anterior como histórico.
+    - El cliente original se conserva como cancelado.
+    - Se crea un nuevo cliente activo con los mismos datos base.
+    - Si se ingresa deuda, se suma al saldo y se registra salida en caja.
     """
     from sqlalchemy import func
 
-    cliente = Cliente.query.get_or_404(cliente_id)
+    # ======================================================
+    # 🔍 1️⃣ Obtener cliente y verificar estado
+    # ======================================================
+    cliente_antiguo = Cliente.query.get_or_404(cliente_id)
 
-    # ⚠️ Caso 1: ya está activo
-    if not cliente.cancelado:
-        msg = f"El cliente {cliente.nombre} ya está activo."
+    if not cliente_antiguo.cancelado:
+        msg = f"⚠️ El cliente {cliente_antiguo.nombre} ya está activo."
         if request.headers.get("X-Requested-With") == "fetch":
             return jsonify({"ok": False, "error": msg}), 400
         flash(msg, "info")
         return redirect(url_for("app_rutas.clientes_cancelados_view"))
 
-    # ⚠️ Caso 2: verificar si ya existe un cliente ACTIVO con el mismo código
-    cliente_activo = Cliente.query.filter(
-        Cliente.codigo == cliente.codigo,
-        Cliente.id != cliente.id,
-        Cliente.cancelado == False
-    ).first()
+    # ======================================================
+    # 💾 1.5️⃣ Asegurar que el antiguo quede guardado como histórico
+    # ======================================================
+    cliente_antiguo.cancelado = True
+    cliente_antiguo.ultimo_abono_fecha = hora_actual()
+    db.session.commit()  # 🧩 Guardamos antes de crear el nuevo
+    db.session.expunge(cliente_antiguo)  # 🔒 Lo sacamos de la sesión actual
 
-    if cliente_activo:
-        msg = f"El cliente {cliente.nombre} ya tiene una renovación activa en la lista de activos."
-        if request.headers.get("X-Requested-With") == "fetch":
-            return jsonify({"ok": False, "error": msg}), 400
-        flash(msg, "warning")
-        return redirect(url_for("app_rutas.clientes_cancelados_view"))
+    # ======================================================
+    # 🧩 2️⃣ Crear nuevo cliente activo (manteniendo el antiguo como histórico)
+    # ======================================================
+    nuevo_cliente = Cliente(
+        codigo=cliente_antiguo.codigo,
+        orden=cliente_antiguo.orden or 1,
+        nombre=cliente_antiguo.nombre,
+        direccion=cliente_antiguo.direccion,
+        monto=0.0,
+        plazo=0,
+        interes=0.0,
+        saldo=0.0,
+        fecha_creacion=local_date(),
+        ultimo_abono_fecha=None,
+        cancelado=False
+    )
+    db.session.add(nuevo_cliente)
+    db.session.flush()  # ✅ Obtener el ID antes de continuar
 
-    # 💰 Capturar posible abono/deuda desde formulario
+    # ======================================================
+    # 💰 3️⃣ Capturar deuda o abono desde formulario
+    # ======================================================
     try:
         deuda_pendiente = float(request.form.get("abono", 0) or 0)
     except ValueError:
         deuda_pendiente = 0.0
 
-    # 🔎 Último préstamo del cliente (si lo hay)
-    prestamo = max(cliente.prestamos, key=lambda p: p.fecha) if cliente.prestamos else None
+    # ======================================================
+    # 💵 4️⃣ Crear préstamo asociado al nuevo cliente
+    # ======================================================
+    nuevo_prestamo = Prestamo(
+        cliente_id=nuevo_cliente.id,
+        monto=deuda_pendiente,
+        interes=0.0,
+        plazo=0,
+        fecha=local_date(),
+        saldo=deuda_pendiente,
+        frecuencia="diario",
+    )
+    db.session.add(nuevo_prestamo)
 
-    # 💵 Registrar deuda pendiente si aplica
+    # ======================================================
+    # 💸 5️⃣ Registrar movimiento en caja si hay deuda
+    # ======================================================
     if deuda_pendiente > 0:
-        if prestamo:
-            prestamo.saldo = (prestamo.saldo or 0.0) + deuda_pendiente
-        else:
-            # Crear préstamo nuevo con la deuda ingresada
-            prestamo = Prestamo(
-                cliente_id=cliente.id,
-                monto=deuda_pendiente,
-                interes=0.0,
-                plazo=0,
-                fecha=local_date(),
-                saldo=deuda_pendiente,
-                frecuencia="diario",
-            )
-            db.session.add(prestamo)
-
         mov = MovimientoCaja(
             tipo="salida",
             monto=deuda_pendiente,
-            descripcion=f"Ajuste reactivación – deuda pendiente de {cliente.nombre}",
+            descripcion=f"Reactivación de {nuevo_cliente.nombre} — deuda pendiente",
             fecha=hora_actual(),
         )
         db.session.add(mov)
 
-    else:
-        # 💡 Si no tiene deuda, asegurar que al menos tenga un préstamo base
-        if not cliente.prestamos:
-            nuevo_prestamo = Prestamo(
-                cliente_id=cliente.id,
-                monto=0.0,
-                interes=0.0,
-                plazo=0,
-                fecha=local_date(),
-                saldo=0.0,
-                frecuencia="diario",
-            )
-            db.session.add(nuevo_prestamo)
+    # ======================================================
+    # 🧮 6️⃣ Calcular saldo y actualizar estados
+    # ======================================================
+    nuevo_cliente.saldo = deuda_pendiente
 
-    # ✅ Reactivar cliente (pasa a activos)
-    cliente.cancelado = False
-    cliente.fecha_creacion = local_date()
-
-    # 🔁 Calcular nuevo saldo total
-    cliente.saldo = (
-        db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0))
-        .filter(Prestamo.cliente_id == cliente.id)
-        .scalar()
-        or 0.0
-    )
-
-    # 🧾 Ajustar orden si no tenía
-    if not cliente.orden or cliente.orden <= 0:
-        cliente.orden = 1
-
+    # ======================================================
+    # 💾 7️⃣ Guardar cambios y actualizar liquidación
+    # ======================================================
     db.session.commit()
     actualizar_liquidacion_por_movimiento(local_date())
 
-    # 🔁 Si fue una petición AJAX (fetch)
+    # ======================================================
+    # 💬 8️⃣ Respuesta final (Fetch o navegación normal)
+    # ======================================================
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify({
             "ok": True,
-            "id": cliente.id,
-            "nombre": cliente.nombre,
-            "saldo": float(cliente.saldo),
+            "id": nuevo_cliente.id,
+            "nombre": nuevo_cliente.nombre,
+            "saldo": float(nuevo_cliente.saldo),
             "deuda": float(deuda_pendiente),
         }), 200
 
-    # 📢 Mensaje visual para navegación normal
-    flash(
-        f"✅ Cliente {cliente.nombre} reactivado correctamente. "
-        f"Saldo pendiente: ${cliente.saldo:.2f} "
-        f"(ajuste en caja -${deuda_pendiente:.2f})",
-        "success"
-    )
+    flash(f"🟢 Cliente {nuevo_cliente.nombre} renovado correctamente.", "success")
     return redirect(url_for("app_rutas.index"))
+
 
 
 # ======================================================

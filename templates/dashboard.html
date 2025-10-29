@@ -5,68 +5,82 @@
 <div class="container mt-4 mb-5">
   <h2 class="text-center mb-4 fw-bold text-primary">📊 Dashboard General del Sistema de Créditos</h2>
 
-  <!-- 📈 Tarjetas principales -->
+  <!-- 📈 TARJETAS PRINCIPALES -->
   <div class="row g-4 justify-content-center">
     
-    <!-- Total de Clientes Activos -->
+    <!-- Clientes activos -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 bg-info text-white">
-        <h6>👥 Clientes Activos</h6>
-        <h2 class="fw-bold">{{ total_clientes_activos }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.index') }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 bg-info text-white hover-card">
+          <h6>👥 Clientes Activos</h6>
+          <h2 class="fw-bold">{{ total_clientes_activos }}</h2>
+        </div>
+      </a>
     </div>
 
-    <!-- Total Abonos -->
+    <!-- Abonos del día -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 bg-success text-white">
-        <h6>💰 Total Abonos del Día</h6>
-        <h2 class="fw-bold">${{ "%.2f"|format(total_abonos) }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='abono', fecha=hoy.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 bg-success text-white hover-card">
+          <h6>💰 Abonos del Día</h6>
+          <h2 class="fw-bold">${{ "%.2f"|format(total_abonos) }}</h2>
+        </div>
+      </a>
     </div>
 
-    <!-- Total Préstamos -->
+    <!-- Préstamos del día -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 bg-danger text-white">
-        <h6>🏦 Total Préstamos del Día</h6>
-        <h2 class="fw-bold">${{ "%.2f"|format(total_prestamos) }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.prestamos_por_dia', fecha=hoy.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 bg-danger text-white hover-card">
+          <h6>🏦 Préstamos del Día</h6>
+          <h2 class="fw-bold">${{ "%.2f"|format(total_prestamos) }}</h2>
+        </div>
+      </a>
     </div>
 
-    <!-- Entradas -->
+    <!-- Entradas manuales -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 bg-primary text-white">
-        <h6>📥 Entradas Manuales</h6>
-        <h2 class="fw-bold">${{ "%.2f"|format(total_entradas) }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='entrada_manual', fecha=hoy.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 bg-primary text-white hover-card">
+          <h6>📥 Entradas Manuales</h6>
+          <h2 class="fw-bold">${{ "%.2f"|format(total_entradas) }}</h2>
+        </div>
+      </a>
     </div>
 
     <!-- Salidas -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 bg-warning text-dark">
-        <h6>📤 Salidas de Efectivo</h6>
-        <h2 class="fw-bold">${{ "%.2f"|format(total_salidas) }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='salida', fecha=hoy.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 bg-warning text-dark hover-card">
+          <h6>📤 Salidas de Efectivo</h6>
+          <h2 class="fw-bold">${{ "%.2f"|format(total_salidas) }}</h2>
+        </div>
+      </a>
     </div>
 
     <!-- Gastos -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 bg-secondary text-white">
-        <h6>🧾 Gastos del Día</h6>
-        <h2 class="fw-bold">${{ "%.2f"|format(total_gastos) }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.movimientos_por_dia', tipo='gasto', fecha=hoy.strftime('%Y-%m-%d')) }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 bg-secondary text-white hover-card">
+          <h6>🧾 Gastos del Día</h6>
+          <h2 class="fw-bold">${{ "%.2f"|format(total_gastos) }}</h2>
+        </div>
+      </a>
     </div>
 
-    <!-- Caja Total -->
+    <!-- Caja total -->
     <div class="col-md-4 col-lg-3">
-      <div class="card text-center p-3 shadow-sm border-0 
-           {% if caja_total >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
-        <h6>💼 Caja Total del Día</h6>
-        <h2 class="fw-bold">${{ "%.2f"|format(caja_total) }}</h2>
-      </div>
+      <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="text-decoration-none">
+        <div class="card text-center p-3 shadow-sm border-0 hover-card 
+             {% if caja_total >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+          <h6>💼 Caja Total del Día</h6>
+          <h2 class="fw-bold">${{ "%.2f"|format(caja_total) }}</h2>
+        </div>
+      </a>
     </div>
   </div>
 
-  <!-- 🕒 Hora actual -->
+  <!-- 🕒 HORA ACTUAL -->
   <div class="text-center mt-5">
     <hr>
     <p class="text-muted">
@@ -76,9 +90,19 @@
   </div>
 </div>
 
+<!-- 🎨 ESTILOS -->
 <style>
   .card h6 { font-weight: 500; margin-bottom: .4rem; }
   .card h2 { font-size: 1.8rem; }
   .shadow-sm { box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important; }
+
+  .hover-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+  }
+  .hover-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
+  }
 </style>
 {% endblock %}

@@ -12,7 +12,7 @@ class Cliente(db.Model):
     __tablename__ = "cliente"
 
     id = db.Column(db.Integer, primary_key=True)
-    codigo = db.Column(db.String(50), unique=True, nullable=False)
+    codigo = db.Column(db.String(50), nullable=False, index=True)
     nombre = db.Column(db.String(200), nullable=False)
     direccion = db.Column(db.String(255))
     telefono = db.Column(db.String(50))
