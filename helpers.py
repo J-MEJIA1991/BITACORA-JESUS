@@ -1,3 +1,4 @@
+
 # ======================================================
 # helpers.py — versión FINAL (Créditos System, hora Chile 🇨🇱)
 # ======================================================
@@ -103,10 +104,13 @@ def reconstruir_movimientos_prestamos():
 
 
 # ---------------------------------------------------
-# 🔹 Actualizar liquidación diaria
+# 🔹 Actualizar liquidación diaria (ahora con commit opcional)
 # ---------------------------------------------------
-def actualizar_liquidacion_por_movimiento(fecha: date):
-    """Recalcula la liquidación para una fecha según movimientos y abonos (hora Chile)."""
+def actualizar_liquidacion_por_movimiento(fecha: date, commit: bool = True):
+    """
+    Recalcula la liquidación para una fecha según movimientos y abonos (hora Chile).
+    Si commit=False, no confirma los cambios (para usar dentro de otras funciones).
+    """
     start, end = day_range(fecha)
 
     # 💰 Abonos de clientes
@@ -184,7 +188,9 @@ def actualizar_liquidacion_por_movimiento(fecha: date):
     liq.caja_manual = caja_anterior
     liq.caja = caja_actual
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
+
     return liq
 
 
@@ -234,6 +240,7 @@ def reparar_cliente(nombre: str | int):
     print(f"✅ Cliente '{cliente.nombre}' reparado correctamente.")
     print(f"💰 Se devolvieron ${saldo_devuelto:.2f} a la caja.")
 
+
 # ======================================================
 # 🧭 Función para normalizar hora sin zona (modo local Chile)
 # ======================================================
@@ -249,3 +256,64 @@ def hora_sin_tz(dt=None):
     return dt.astimezone(CHILE_TZ).replace(tzinfo=None)
 
 
+# ======================================================
+# 📊 RESUMEN DEL DÍA (Optimización de consultas)
+# ======================================================
+from sqlalchemy import case
+
+def resumen_dia(db, start, end):
+    """
+    Devuelve un resumen del día (abonos, préstamos, entradas, salidas, gastos)
+    usando una sola consulta consolidada en SQL.
+    """
+    resumen = {}
+
+    # 💰 Total de abonos
+    resumen["abonos"] = (
+        db.session.query(func.coalesce(func.sum(Abono.monto), 0.0))
+        .filter(Abono.fecha >= start, Abono.fecha < end)
+        .scalar() or 0.0
+    )
+
+    # 🏦 Total de préstamos
+    resumen["prestamos"] = (
+        db.session.query(func.coalesce(func.sum(Prestamo.monto), 0.0))
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .filter(
+            Cliente.cancelado == False,
+            Prestamo.fecha >= start,
+            Prestamo.fecha < end,
+        )
+        .scalar() or 0.0
+    )
+
+    # 💼 Movimiento de caja: entradas, salidas, gastos (una sola query)
+    movs = (
+        db.session.query(
+            func.coalesce(
+                func.sum(case((MovimientoCaja.tipo == "entrada_manual", MovimientoCaja.monto), else_=0)),
+                0,
+            ).label("entradas"),
+            func.coalesce(
+                func.sum(case((MovimientoCaja.tipo == "salida", MovimientoCaja.monto), else_=0)),
+                0,
+            ).label("salidas"),
+            func.coalesce(
+                func.sum(case((MovimientoCaja.tipo == "gasto", MovimientoCaja.monto), else_=0)),
+                0,
+            ).label("gastos"),
+        )
+        .filter(MovimientoCaja.fecha >= start, MovimientoCaja.fecha < end)
+        .first()
+    )
+
+    resumen["entradas"] = movs.entradas
+    resumen["salidas"] = movs.salidas
+    resumen["gastos"] = movs.gastos
+    resumen["caja_total"] = (
+        resumen["abonos"]
+        + resumen["entradas"]
+        - (resumen["prestamos"] + resumen["salidas"] + resumen["gastos"])
+    )
+
+    return resumen

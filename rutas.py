@@ -134,107 +134,116 @@ def dashboard():
         caja_total=caja_total,
     )
 
+
 # ======================================================
-# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (corregida)
+# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (con CACHÉ DE DÍA)
 # ======================================================
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+from datetime import timedelta
+from flask import current_app
+import time
+
+# ⚙️ Caché en memoria (simple y segura)
+_cache_resumen = {"fecha": None, "data": None, "timestamp": 0}
+
 @app_rutas.route("/")
 @login_required
 def index():
-    clientes = (
-        Cliente.query.filter_by(cancelado=False)
-        .order_by(Cliente.orden.asc().nullsfirst(), Cliente.id.asc())
-        .all()
-    )
-
-    # 🔄 Reasignar orden si está roto
-    for idx, c in enumerate(clientes, start=1):
-        if not c.orden or c.orden != idx:
-            c.orden = idx
-    db.session.commit()
+    """Lista de clientes activos y resumen financiero del día (optimizado con caché)."""
 
     hoy = local_date()
-    for c in clientes:
-        estado = "normal"
-        if c.prestamos:
-            ultimo = max(c.prestamos, key=lambda p: p.fecha)
-            if ultimo.plazo:
-                fecha_venc = ultimo.fecha + timedelta(days=ultimo.plazo)
-                dias_pasados = (hoy - fecha_venc).days
-                if 0 <= dias_pasados < 30:
-                    estado = "vencido"
-                elif dias_pasados >= 30:
-                    estado = "moroso"
-        c.estado_plazo = estado
 
-    resumen = obtener_resumen_total()
-    start, end = day_range(hoy)
+    # ======================================================
+    # ⚡ Recuperar del caché si es del mismo día y reciente (< 30 s)
+    # ======================================================
+    if (
+        _cache_resumen["fecha"] == hoy
+        and time.time() - _cache_resumen["timestamp"] < 30
+    ):
+        resumen_hoy = _cache_resumen["data"]["resumen_hoy"]
+        resumen_total = _cache_resumen["data"]["resumen_total"]
+        clientes = _cache_resumen["data"]["clientes"]
+        print("♻️  Usando caché de resumen del día (sin recalcular SQL)")
+    else:
+        print("⚙️  Calculando resumen y cargando clientes desde BD...")
 
-    # 💰 Total abonos
-    total_abonos = (
-        db.session.query(func.coalesce(func.sum(Abono.monto), 0.0))
-        .filter(Abono.fecha >= start, Abono.fecha < end)
-        .scalar() or 0.0
-    )
-
-    # 🏦 Total préstamos (corregido — desde Prestamo)
-    total_prestamos = (
-        db.session.query(func.coalesce(func.sum(Prestamo.monto), 0.0))
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .filter(
-            Cliente.cancelado == False,
-            Prestamo.fecha >= start,
-            Prestamo.fecha < end
+        # 🧾 Cargar todos los clientes activos + préstamos (consulta optimizada)
+        clientes = (
+            Cliente.query.options(joinedload(Cliente.prestamos))
+            .filter_by(cancelado=False)
+            .order_by(Cliente.orden.asc().nullsfirst(), Cliente.id.asc())
+            .all()
         )
-        .scalar() or 0.0
-    )
 
-    # 💵 Entradas manuales
-    total_entradas = (
-        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
-        .filter(
-            MovimientoCaja.tipo == "entrada_manual",
-            MovimientoCaja.fecha >= start,
-            MovimientoCaja.fecha < end
+        # 🔄 Reasignar orden si está roto
+        orden_cambiado = False
+        for idx, c in enumerate(clientes, start=1):
+            if not c.orden or c.orden != idx:
+                c.orden = idx
+                orden_cambiado = True
+        if orden_cambiado:
+            db.session.commit()
+
+        # 📆 Estado del plazo
+        subquery = (
+            db.session.query(
+                Prestamo.cliente_id, func.max(Prestamo.fecha).label("ultima_fecha")
+            )
+            .group_by(Prestamo.cliente_id)
+            .subquery()
         )
-        .scalar() or 0.0
-    )
-
-    # 💸 Salidas
-    total_salidas = (
-        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
-        .filter(
-            MovimientoCaja.tipo == "salida",
-            MovimientoCaja.fecha >= start,
-            MovimientoCaja.fecha < end
+        ultimos = dict(
+            db.session.query(subquery.c.cliente_id, subquery.c.ultima_fecha).all()
         )
-        .scalar() or 0.0
-    )
 
-    # 🧾 Gastos
-    total_gastos = (
-        db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
-        .filter(
-            MovimientoCaja.tipo == "gasto",
-            MovimientoCaja.fecha >= start,
-            MovimientoCaja.fecha < end
-        )
-        .scalar() or 0.0
-    )
+        for c in clientes:
+            estado = "normal"
+            ultima_fecha = ultimos.get(c.id)
+            if ultima_fecha:
+                p = (
+                    Prestamo.query.filter_by(cliente_id=c.id, fecha=ultima_fecha).first()
+                )
+                if p and p.plazo:
+                    fecha_venc = p.fecha + timedelta(days=p.plazo)
+                    dias_pasados = (hoy - fecha_venc).days
+                    if 0 <= dias_pasados < 30:
+                        estado = "vencido"
+                    elif dias_pasados >= 30:
+                        estado = "moroso"
+            c.estado_plazo = estado
 
-    # 📦 Caja total del día
-    caja_total = total_abonos + total_entradas - (total_prestamos + total_salidas + total_gastos)
+        # 📊 Resumen del día (helpers.py)
+        from helpers import resumen_dia
+        from tiempo import day_range
 
+        start, end = day_range(hoy)
+        resumen_hoy = resumen_dia(db, start, end)
+        resumen_total = obtener_resumen_total()
+
+        # 💾 Guardar en caché
+        _cache_resumen["fecha"] = hoy
+        _cache_resumen["timestamp"] = time.time()
+        _cache_resumen["data"] = {
+            "resumen_hoy": resumen_hoy,
+            "resumen_total": resumen_total,
+            "clientes": clientes,
+        }
+
+    # ======================================================
+    # 📋 Renderizar plantilla
+    # ======================================================
     return render_template(
         "index.html",
         clientes=clientes,
-        resumen=resumen,
         hoy=hoy,
-        total_abonos=total_abonos,
-        total_prestamos=total_prestamos,
-        total_entradas=total_entradas,
-        total_salidas=total_salidas,
-        total_gastos=total_gastos,
-        caja_total=caja_total,
+        resumen=resumen_total,
+        total_abonos=resumen_hoy["abonos"],
+        total_prestamos=resumen_hoy["prestamos"],
+        total_entradas=resumen_hoy["entradas"],
+        total_salidas=resumen_hoy["salidas"],
+        total_gastos=resumen_hoy["gastos"],
+        caja_total=resumen_hoy["caja_total"],
     )
 
 
@@ -304,7 +313,7 @@ def logout():
     return redirect(url_for("app_rutas.login"))
 
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (versión FINAL — preserva histórico)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (versión FINAL OPTIMIZADA — commit controlado)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
@@ -340,24 +349,20 @@ def nuevo_cliente():
                 flash("Debe ingresar un código de cliente.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
-            # ------------------------------------------------------
-            # 🔍 Buscar cliente existente por código
-            # ------------------------------------------------------
+            hoy = local_date()
             cliente = Cliente.query.filter_by(codigo=codigo).first()
 
-            # ------------------------------------------------------
-            # 🔁 Si existe y está CANCELADO → CLONAR A UNO NUEVO (no reactivar el mismo)
-            # ------------------------------------------------------
+            # ======================================================
+            # 🔁 Renovación de cliente cancelado
+            # ======================================================
             if cliente and cliente.cancelado:
-                # ⚠️ NO cambiar cliente.cancelado; se preserva histórico
-                # 🆕 Crear NUEVO cliente activo con los mismos datos base
                 nuevo = Cliente(
                     nombre=nombre or cliente.nombre or codigo,
-                    codigo=cliente.codigo,          # mismo código para continuidad (si tu DB lo permite)
+                    codigo=cliente.codigo,
                     direccion=direccion or cliente.direccion or "",
                     telefono=telefono or cliente.telefono or "",
                     orden=orden or cliente.orden or 0,
-                    fecha_creacion=local_date(),
+                    fecha_creacion=hoy,
                     ultimo_abono_fecha=None,
                     saldo=0.0,
                     cancelado=False,
@@ -365,14 +370,13 @@ def nuevo_cliente():
                 db.session.add(nuevo)
                 db.session.flush()  # obtener nuevo.id
 
-                # 💰 Crear préstamo si hay monto
                 if monto > 0:
                     saldo_total = monto + (monto * (interes / 100.0))
                     prestamo = Prestamo(
                         cliente_id=nuevo.id,
                         monto=monto,
                         saldo=saldo_total,
-                        fecha=local_date(),
+                        fecha=hoy,
                         interes=interes,
                         plazo=plazo,
                         frecuencia=frecuencia,
@@ -386,47 +390,46 @@ def nuevo_cliente():
                     nuevo.saldo = saldo_total
                     db.session.add_all([prestamo, mov])
 
-                # 🧷 Aseguramos que el viejo quede como histórico (por si acaso)
-                #    (no cambiamos cancelado=False en el viejo)
                 cliente.ultimo_abono_fecha = cliente.ultimo_abono_fecha or hora_actual()
-
                 db.session.commit()
+
+                # ✅ Recalcular sin duplicar commits
                 if monto > 0:
-                    actualizar_liquidacion_por_movimiento(local_date())
+                    actualizar_liquidacion_por_movimiento(hoy, commit=False)
+                    db.session.commit()
 
                 flash(f"Cliente {nuevo.nombre} renovado correctamente (histórico preservado).", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
-            # ------------------------------------------------------
-            # 🚫 Si ya existe y está ACTIVO → advertencia
-            # ------------------------------------------------------
+            # ======================================================
+            # 🚫 Cliente activo existente
+            # ======================================================
             if cliente and not cliente.cancelado:
                 flash("Ese código ya pertenece a un cliente activo.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
-            # ------------------------------------------------------
-            # 🧍‍♂️ Crear cliente NUEVO (no existe)
-            # ------------------------------------------------------
+            # ======================================================
+            # 🧍‍♂️ Nuevo cliente (no existe)
+            # ======================================================
             nuevo = Cliente(
                 nombre=nombre or codigo,
                 codigo=codigo,
                 direccion=direccion or "",
                 telefono=telefono or "",
                 orden=orden,
-                fecha_creacion=local_date(),
+                fecha_creacion=hoy,
                 cancelado=False,
             )
             db.session.add(nuevo)
             db.session.flush()
 
-            # 💰 Crear préstamo si hay monto
             if monto > 0:
                 saldo_total = monto + (monto * (interes / 100.0))
                 prestamo = Prestamo(
                     cliente_id=nuevo.id,
                     monto=monto,
                     saldo=saldo_total,
-                    fecha=local_date(),
+                    fecha=hoy,
                     interes=interes,
                     plazo=plazo,
                     frecuencia=frecuencia,
@@ -441,8 +444,11 @@ def nuevo_cliente():
                 db.session.add_all([prestamo, mov])
 
             db.session.commit()
+
+            # ✅ Recalcular liquidación sin segundo commit redundante
             if monto > 0:
-                actualizar_liquidacion_por_movimiento(local_date())
+                actualizar_liquidacion_por_movimiento(hoy, commit=False)
+                db.session.commit()
 
             flash(f"Cliente {nuevo.nombre} creado correctamente.", "success")
             return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
@@ -462,7 +468,6 @@ def nuevo_cliente():
         codigo_sugerido = "000000"
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
-
 
 # ======================================================
 # 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
