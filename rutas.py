@@ -8,6 +8,7 @@ from flask import (
     Blueprint, render_template, request, redirect,
     url_for, flash, session, jsonify
 )
+from helpers import mes_actual_chile_bounds
 from functools import wraps
 from sqlalchemy import func
 from extensions import db
@@ -1589,6 +1590,52 @@ def prestamos_por_dia(fecha):
         fecha=fecha_obj,
         total_prestamos=total_prestamos,
     )
+
+@app_rutas.route("/ganancias_mes")
+def ganancias_mes_view():
+    inicio, fin, _ahora = mes_actual_chile_bounds()
+
+    q = (
+        db.session.query(Prestamo, Cliente)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .filter(Prestamo.fecha >= inicio, Prestamo.fecha <= fin)
+        .order_by(Prestamo.fecha.asc(), Cliente.codigo.asc())
+    )
+
+    filas = []
+    total_venta = 0
+    total_ganancia = 0
+
+    for p, c in q.all():
+        venta = float(p.monto or 0)
+        interes = float(p.interes or 0)
+        ganancia = venta * (interes / 100)
+
+        venta_i = int(round(venta))
+        ganancia_i = int(round(ganancia))
+
+        filas.append({
+            "codigo": c.codigo,
+            "fecha": p.fecha,
+            "nombre": c.nombre,
+            "venta": str(venta_i),
+            "interes": str(interes),
+            "ganancia": str(ganancia_i)
+        })
+
+        total_venta += venta_i
+        total_ganancia += ganancia_i
+
+    return render_template(
+        "ganancias_mes.html",
+        filas=filas,
+        total_venta=str(total_venta),
+        total_ganancia=str(total_ganancia),
+        fecha_inicio=inicio,
+        fecha_fin=fin
+    )
+
+
 
 # ======================================================
 # 🕒 TEST DE HORA LOCAL DE CHILE 🇨🇱

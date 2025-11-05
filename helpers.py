@@ -317,3 +317,22 @@ def resumen_dia(db, start, end):
     )
 
     return resumen
+
+# ===========================
+# MES ACTUAL (Chile)
+# ===========================
+import calendar
+from zoneinfo import ZoneInfo
+
+def mes_actual_chile_bounds():
+    """
+    Devuelve inicio y fin del mes actual usando zona Chile.
+    Ej:
+    (2025-11-01, 2025-11-30, datetime_con_hora)
+    """
+    tz = ZoneInfo("America/Santiago")
+    ahora = datetime.now(tz)
+    y, m = ahora.year, ahora.month
+    inicio = date(y, m, 1)
+    fin = date(y, m, calendar.monthrange(y, m)[1])
+    return inicio, fin, ahora

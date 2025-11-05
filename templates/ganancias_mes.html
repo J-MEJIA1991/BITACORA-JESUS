@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Ganancias del Mes{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h2 class="mb-0">💰 Ganancias del Mes</h2>
+    <div class="text-muted small">
+      <span class="me-2">Desde: <code>{{ fecha_inicio }}</code></span>
+      <span>Hasta: <code>{{ fecha_fin }}</code></span>
+    </div>
+  </div>
+
+  <div class="mb-3 d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('app_rutas.index') }}">⬅️ Volver</a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Fecha</th>
+          <th scope="col">Nombre</th>
+          <th scope="col">Venta</th>
+          <th scope="col">Interés</th>
+          <th scope="col">Ganancia</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if filas and filas|length > 0 %}
+          {% for f in filas %}
+          <tr>
+            <td class="text-nowrap">{{ f.codigo }}</td>
+            <td class="text-nowrap">
+              {% if f.fecha %}
+                {{ f.fecha.strftime("%Y-%m-%d") }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="text-nowrap">{{ f.nombre }}</td>
+            <td class="text-end">{{ f.venta }}</td>
+            <td class="text-end">{{ f.interes }}</td>
+            <td class="text-end">{{ f.ganancia }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              No hay préstamos creados entre {{ fecha_inicio }} y {{ fecha_fin }}.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr>
+          <th colspan="3" class="text-end">TOTAL VENTA DEL MES:</th>
+          <th class="text-end">{{ total_venta }}</th>
+          <th class="text-end">TOTAL GANANCIA DEL MES:</th>
+          <th class="text-end">{{ total_ganancia }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <p class="text-muted small mt-2">
+    * Ganancia = venta × (interés / 100).<br>
+    * Se listan todos los préstamos con fecha dentro del mes actual.
+  </p>
+</div>
+{% endblock %}
