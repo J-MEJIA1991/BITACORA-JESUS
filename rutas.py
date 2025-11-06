@@ -358,7 +358,7 @@ def nuevo_cliente():
             # ======================================================
             if cliente and cliente.cancelado:
                 nuevo = Cliente(
-                    nombre=nombre or cliente.nombre or codigo,
+                    nombre=cliente.nombre,
                     codigo=cliente.codigo,
                     direccion=direccion or cliente.direccion or "",
                     telefono=telefono or cliente.telefono or "",
