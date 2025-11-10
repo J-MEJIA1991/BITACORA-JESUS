@@ -318,6 +318,22 @@ def resumen_dia(db, start, end):
 
     return resumen
 
+# ======================================================
+# CACHE resumen del día
+# ======================================================
+from extensions import cache
+
+def eliminar_cache_resumen_hoy():
+    """
+    Elimina el cache del resumen diario basado en fecha Chile.
+    Esto asegura que cambios como orden, abonos, nuevos clientes etc
+    vuelvan a recalcular el resumen.
+    """
+    hoy = local_date()
+    clave = f"resumen_{hoy.isoformat()}"
+    cache.delete(clave)
+
+
 # ===========================
 # MES ACTUAL (Chile)
 # ===========================

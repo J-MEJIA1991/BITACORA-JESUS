@@ -5,6 +5,23 @@
   <title>{% block title %}Sistema de Préstamos{% endblock %}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- ✅ Highlight verde para cliente reactivado o cliente creado -->
+  <style>
+  .resaltado-reactivado {
+    background-color: #28a745 !important;
+    transition: background-color 1.5s ease-out;
+  }
+  .resaltado-reactivado.fade-out {
+    background-color: transparent !important;
+  }
+  </style>
+
+  <!-- 🔊 Sonido al reactivar / crear cliente -->
+  <audio id="audioReactivaCliente">
+    <source src="https://cdn.jsdelivr.net/gh/ManzDev/sounds/coin.mp3" type="audio/mpeg">
+  </audio>
+
 </head>
 
 <body class="bg-light">
@@ -73,11 +90,37 @@
 
   <!-- ⚙️ Script unificado -->
   <script>
+  // funciones globales highlight / sonido / scroll SOLO para index
+  function reproducirSonidoReactivado(){
+    const a = document.getElementById("audioReactivaCliente");
+    if(a) a.play().catch(()=>{});
+  }
+
+  function resaltarClienteReactivado(id){
+    // solo si estamos en index
+    if(!window.location.pathname.endsWith("/")) return;
+    const fila = document.querySelector(`#cliente-row-${id}`);
+    if(!fila) return;
+    reproducirSonidoReactivado();
+    fila.classList.add("resaltado-reactivado");
+    setTimeout(()=>{ fila.classList.add("fade-out"); setTimeout(()=>{ fila.classList.remove("resaltado-reactivado","fade-out") },1500); },50);
+  }
+
+  function scrollToCliente(id){
+    // solo si estamos en index
+    if(!window.location.pathname.endsWith("/")) return;
+    const fila = document.querySelector(`#cliente-row-${id}`);
+    if(fila){
+      fila.scrollIntoView({ behavior:"smooth", block:"center" });
+    }
+  }
+  </script>
+
+  <script>
   document.addEventListener("DOMContentLoaded", () => {
     const toast = document.getElementById("toastProcesando");
     let visible = false;
 
-    // ==================== FUNCIONES GLOBALES ====================
     function mostrarProcesando() {
       if (visible) return;
       visible = true;
@@ -94,7 +137,6 @@
     window.mostrarProcesando = mostrarProcesando;
     window.ocultarProcesando = ocultarProcesando;
 
-    // ==================== FORMULARIOS ====================
     document.querySelectorAll("form").forEach(form => {
       form.addEventListener("submit", () => {
         mostrarProcesando();
@@ -102,7 +144,6 @@
       });
     });
 
-    // ==================== ENLACES ====================
     document.querySelectorAll("a[href]").forEach(link => {
       const href = link.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
@@ -112,7 +153,6 @@
       });
     });
 
-    // ==================== MODAL NUEVO CLIENTE ====================
     const modalNuevoCliente = new bootstrap.Modal(document.getElementById("modalNuevoCliente"));
     const modalBody = document.getElementById("modalNuevoClienteBody");
     const btnNuevoCliente = document.getElementById("btnNuevoCliente");
@@ -141,9 +181,21 @@
       }
     });
 
-    // Ocultar al cargar la página
     window.addEventListener("load", ocultarProcesando);
   });
   </script>
+
+  <!-- 🕒 Reloj dinámico Chile -->
+  <script>
+    function actualizarRelojChile() {
+      const opciones = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+      const ahoraChile = new Date().toLocaleTimeString('es-CL', opciones);
+      const elemento = document.getElementById('horaChile');
+      if (elemento) elemento.textContent = ahoraChile;
+    }
+    setInterval(actualizarRelojChile, 1000);
+    actualizarRelojChile();
+  </script>
+
 </body>
 </html>

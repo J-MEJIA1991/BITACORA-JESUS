@@ -3,7 +3,7 @@
 
 {% block content %}
 <h2 class="mb-4">📋 Listado de Clientes</h2>
-<p class="text-end text-muted mb-3">🕒 Hora actual en Chile: {{ hora_actual() }}</p>
+<p class="text-end text-muted mb-3">🕒 Hora actual en Chile: <span id="horaChile"></span></p>
 
 <!-- =================== BOTONES PRINCIPALES =================== -->
 <div class="mb-3 d-flex flex-wrap gap-2">
@@ -42,19 +42,21 @@
       {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
       {% set dias_desde = (hoy - u.fecha).days if u and u.fecha else 0 %}
 
-      <tr id="cliente-{{ c.id }}"
+      <tr id="cliente-row-{{ c.id }}"
           class="fila-cliente
             {% if u and (u.frecuencia or 'diario') == 'mensual' and dias_desde >= 30 and not c.cancelado %}interes-vencido{% endif %}
             {% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}
           ">
 
         <!-- ORDEN -->
-        <td style="width:100px;">
-          <form action="{{ url_for('app_rutas.actualizar_orden', cliente_id=c.id) }}" method="post" class="d-flex actualizar-orden-form">
-            <input type="number" name="orden" value="{{ c.orden }}" class="form-control text-center" style="width:70px;" {% if c.cancelado %}disabled{% endif %}>
-            <button type="submit" class="btn btn-outline-primary ms-1 btn-sm" {% if c.cancelado %}disabled{% endif %}>✔</button>
-          </form>
-        </td>
+<td style="width:100px;">
+  <input type="number"
+         class="form-control text-center orden-input"
+         value="{{ c.orden }}"
+         data-id="{{ c.id }}"
+         style="width:70px;"
+         {% if c.cancelado %}disabled{% endif %}>
+</td>
 
         <!-- DATOS PRINCIPALES -->
         <td>{{ c.codigo }}</td>
@@ -82,23 +84,23 @@
         <td>{{ "%.2f"|format(c.ultimo_abono_monto()) }}</td>
 
         <!-- ABONAR -->
-        <td class="abono-td">
-          {% if not c.cancelado %}
-          <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
-                method="post"
-                class="d-flex justify-content-center form-abono"
-                data-orden="{{ c.orden }}">
-            <input type="hidden" name="codigo" value="{{ c.codigo }}">
-            <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
-                   class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
-                   style="width:120px; height:50px; font-size:1.4rem;"
-                   required autocomplete="off">
-            <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
-          </form>
-          {% else %}
-            <span class="text-muted">Cancelado</span>
-          {% endif %}
-        </td>
+      <td class="abono-td">
+      <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
+        method="post"
+        class="d-flex justify-content-center form-abono"
+        data-orden="{{ c.orden }}">
+    <input type="hidden" name="codigo" value="{{ c.codigo }}">
+    <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
+           class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
+           style="width:120px; height:50px; font-size:1.4rem;"
+           required autocomplete="off">
+    <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
+  </form>
+
+  {% if c.cancelado %}
+    <small class="text-danger fw-bold d-block mt-1">Cancelado</small>
+  {% endif %}
+</td>
 
         <!-- SALDO -->
         <td>
@@ -267,7 +269,7 @@ forms.forEach(form => {
 
       // 💡 Si se aplicó un interés mensual, mostrar aviso visual
       if (data.interes_aplicado) {
-        const fila = document.getElementById(`cliente-${data.cliente_id}`);
+        const fila = document.getElementById(`cliente-row-${data.cliente_id}`);
         if (fila) {
           fila.classList.remove("interes-vencido");
 
@@ -300,7 +302,7 @@ forms.forEach(form => {
       input.classList.add("bg-success", "text-white");
 
       const saldoElem = document.querySelector(`.saldo-texto[data-cliente-id="${data.cliente_id}"]`);
-      const fila = document.getElementById(`cliente-${data.cliente_id}`);
+      const fila = document.getElementById(`cliente-row-${data.cliente_id}`);
 
       if (data.cancelado) {
         // 💥 Si quedó cancelado, animar y eliminar fila
@@ -452,6 +454,15 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
+{% if request.args.get("resaltar") %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const id = "{{ request.args.get('resaltar') }}";
+    resaltarClienteReactivado(id);
+});
+</script>
+{% endif %}
+
 <!-- =================== ESTILOS =================== -->
 <style>
 /* 🚫 Cliente cancelado */
@@ -513,7 +524,7 @@ document.addEventListener("DOMContentLoaded", function() {
 {% if resaltado_id %}
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const fila = document.querySelector(`#cliente-{{ resaltado_id }}`);
+  const fila = document.querySelector(`#cliente-row-{{ resaltado_id }}`);
   if (fila) {
     fila.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => {
@@ -554,7 +565,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // 💨 Desvanecer fila eliminada
-        const fila = document.getElementById(`cliente-${id}`);
+        const fila = document.getElementById(`cliente-row-${id}`);
         if (fila) {
           fila.style.transition = "opacity 0.5s ease, transform 0.5s ease";
           fila.style.opacity = "0";
@@ -573,6 +584,189 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         alert("❌ Error al eliminar el cliente.");
         console.error(err);
+      }
+    });
+  });
+});
+</script>
+
+<style>
+/* 🔧 Estilos drag & drop */
+.drag-handle {
+  cursor: grab;
+  user-select: none;
+  font-size: 1.1rem;
+}
+tr.dragging {
+  opacity: 0.6;
+}
+tr.drop-target {
+  outline: 2px dashed #0d6efd;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const tbody = document.querySelector("#tabla-clientes tbody");
+  if (!tbody) return;
+
+  // ========= UTILIDADES =========
+  const filaPorEvento = (e) => e.target.closest("tr.fila-cliente");
+  const getOrdenInput = (tr) => tr.querySelector(".orden-input");
+  const getClienteId = (tr) => tr.id.replace("cliente-row-", "");
+  const filas = () => Array.from(tbody.querySelectorAll("tr.fila-cliente"));
+  const esCancelado = (tr) => tr.classList.contains("cancelado");
+
+  // Re-numera visualmente los inputs de orden (1..n)
+  function renumerarVisual() {
+    filas().forEach((tr, i) => {
+      const inp = getOrdenInput(tr);
+      if (inp) inp.value = i + 1;
+    });
+  }
+
+  // Mueve en el DOM la fila desde un índice a otro (optimista)
+  function moverFilaDom(idxFrom, idxTo) {
+    const arr = filas();
+    const row = arr[idxFrom];
+    const ref = arr[idxTo];
+    if (!row || !ref || row === ref) return;
+    if (idxTo > idxFrom) {
+      // insertar después
+      ref.after(row);
+    } else {
+      // insertar antes
+      ref.before(row);
+    }
+    renumerarVisual();
+  }
+
+  // ========= DRAG & DROP =========
+  let draggingRow = null;
+
+  // Añade manija y atributos a cada fila (excepto cancelados)
+  filas().forEach(tr => {
+    if (esCancelado(tr)) return;
+    tr.setAttribute("draggable", "true");
+    // Si no tiene manija, la creamos en la celda de orden
+    const ordenTd = tr.querySelector("td:first-child");
+    if (ordenTd && !ordenTd.querySelector(".drag-handle")) {
+      const handle = document.createElement("span");
+      handle.className = "drag-handle ms-1";
+      handle.title = "Arrastra para reordenar";
+      handle.textContent = "⋮⋮";
+      ordenTd.prepend(handle);
+    }
+  });
+
+  tbody.addEventListener("dragstart", (e) => {
+    const tr = filaPorEvento(e);
+    if (!tr || esCancelado(tr)) return;
+    draggingRow = tr;
+    tr.classList.add("dragging");
+    // mejora UX: imagen transparente
+    const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+    e.dataTransfer.setDragImage(img, 0, 0);
+  });
+
+  tbody.addEventListener("dragover", (e) => {
+    if (!draggingRow) return;
+    e.preventDefault();
+    const over = filaPorEvento(e);
+    filas().forEach(r => r.classList.remove("drop-target"));
+    if (over && over !== draggingRow) over.classList.add("drop-target");
+  });
+
+  tbody.addEventListener("dragleave", (e) => {
+    const tr = filaPorEvento(e);
+    if (tr) tr.classList.remove("drop-target");
+  });
+
+  tbody.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const target = filaPorEvento(e);
+    filas().forEach(r => r.classList.remove("drop-target"));
+    if (!draggingRow || !target || draggingRow === target) {
+      if (draggingRow) draggingRow.classList.remove("dragging");
+      draggingRow = null;
+      return;
+    }
+
+    // Índices actuales
+    const arr = filas();
+    const fromIdx = arr.indexOf(draggingRow);
+    const toIdx = arr.indexOf(target);
+
+    // Optimista: mover en DOM y renumerar inputs
+    moverFilaDom(fromIdx, toIdx);
+
+    // Enviar al backend: nueva posición (1-based)
+    const id = getClienteId(draggingRow);
+    const nuevaPos = arr.indexOf(target) === -1
+      ? toIdx + 1
+      : filas().indexOf(draggingRow) + 1; // tras mover, recalcula
+
+    try {
+      const res = await fetch(`/actualizar_orden/${id}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: `orden=${nuevaPos}`
+      });
+      const txt = await res.text();
+
+      if (txt !== "OK") {
+        // Revertir (si el backend no aceptó)
+        // Simplemente recargamos para recuperar estado real
+        alert("❌ No se pudo guardar el nuevo orden. Se recargará la página.");
+        location.reload();
+      }
+    } catch (err) {
+      alert("❌ Error de conexión guardando el nuevo orden. Se recargará la página.");
+      location.reload();
+    } finally {
+      if (draggingRow) draggingRow.classList.remove("dragging");
+      draggingRow = null;
+    }
+  });
+
+  tbody.addEventListener("dragend", () => {
+    if (draggingRow) draggingRow.classList.remove("dragging");
+    draggingRow = null;
+  });
+
+  // ========= ENTER en input de orden (sin recargar) =========
+  document.querySelectorAll(".orden-input").forEach(input => {
+    input.addEventListener("keydown", async (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+
+      const tr = input.closest("tr.fila-cliente");
+      if (!tr) return;
+
+      const id = input.dataset.id;
+      const nuevaPos = parseInt(input.value || "0", 10);
+      if (!nuevaPos || nuevaPos < 1) return alert("Orden inválido.");
+
+      // Optimista: mover DOM localmente
+      const arr = filas();
+      const fromIdx = arr.indexOf(tr);
+      const toIdx = Math.min(Math.max(nuevaPos - 1, 0), arr.length - 1);
+      moverFilaDom(fromIdx, toIdx);
+
+      try {
+        const res = await fetch(`/actualizar_orden/${id}`, {
+          method: "POST",
+          headers: {"Content-Type": "application/x-www-form-urlencoded"},
+          body: `orden=${nuevaPos}`
+        });
+        const txt = await res.text();
+        if (txt !== "OK") {
+          alert("❌ No se pudo guardar el nuevo orden. Se recargará la página.");
+          location.reload();
+        }
+      } catch (err) {
+        alert("❌ Error de conexión guardando el nuevo orden. Se recargará la página.");
+        location.reload();
       }
     });
   });

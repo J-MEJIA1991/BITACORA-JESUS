@@ -23,8 +23,7 @@
           <th>Nombre</th>
           <th>Salida</th>
           <th>Último abono</th>
-          <th>Abonar</th>
-          <th>Saldo</th>
+          <th>Saldo / Historial</th>
         </tr>
       </thead>
       <tbody id="tabla-cancelados">
@@ -48,25 +47,12 @@
               —
             {% endif %}
           </td>
-          <td class="abono-td">
-            <form class="d-flex justify-content-center form-abono-cancelado" data-id="{{ c.id }}">
-              <input type="number"
-                     step="0.01"
-                     min="0.01"
-                     placeholder="0"
-                     class="form-control text-end abono-input fw-bold"
-                     style="width:120px; height:50px; font-size:1.4rem;"
-                     required autocomplete="off">
-              <button type="submit"
-                      class="btn btn-success ms-2"
-                      style="font-size:1.4rem; padding:0 15px;">💵</button>
-            </form>
-          </td>
           <td>
             <span class="saldo-link text-primary fw-bold"
                   data-id="{{ c.id }}"
-                  style="cursor: pointer;">
-              ${{ "%.2f"|format(c.saldo or 0.0) }}
+                  data-nombre="{{ c.nombre }}"
+                  style="cursor: pointer; text-decoration: underline;">
+              ${{ "%.2f"|format(c.saldo or 0.0) }} — Ver historial
             </span>
           </td>
         </tr>
@@ -82,7 +68,7 @@
   {% endif %}
 </div>
 
-<!-- 🧾 Modal para mostrar abonos -->
+<!-- 🧾 Modal para mostrar/gestionar abonos -->
 <div class="modal fade" id="modalAbonos" tabindex="-1" aria-labelledby="modalAbonosLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
@@ -97,13 +83,14 @@
   </div>
 </div>
 
-<!-- ⚙️ Script de eventos -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  // 📘 Mostrar historial de abonos
+
+  // 📘 Mostrar historial de abonos (con botones para eliminar)
   document.querySelectorAll(".saldo-link").forEach((el) => {
     el.addEventListener("click", async () => {
       const id = el.dataset.id;
+      const nombre = el.dataset.nombre || "";
       const modalBody = document.getElementById("tablaAbonos");
       modalBody.innerHTML = "<p class='text-center'>Cargando abonos...</p>";
 
@@ -137,23 +124,29 @@ document.addEventListener("DOMContentLoaded", () => {
             <table class="table table-bordered table-hover align-middle text-center">
               <thead class="table-dark">
                 <tr>
-                  <th>Código</th><th>Fecha</th><th>Hora</th><th>Monto</th><th>Saldo restante</th>
+                  <th>Código</th><th>Fecha</th><th>Hora</th><th>Monto</th><th>Saldo restante</th><th>Acción</th>
                 </tr>
               </thead>
               <tbody>
                 ${data.abonos.map(a => `
-                  <tr>
+                  <tr id="abono-row-${a.id}">
                     <td>${a.codigo}</td>
                     <td>${a.fecha}</td>
                     <td>${a.hora}</td>
                     <td class="text-success fw-bold">$${a.monto.toFixed(2)}</td>
                     <td class="text-primary fw-bold">$${a.saldo.toFixed(2)}</td>
+                    <td>
+                      ${a.id > 0
+                        ? `<button class="btn btn-danger btn-sm eliminar-abono" data-id="${a.id}" data-cliente="${id}">🗑️</button>`
+                        : "<span>—</span>"
+                      }
+                    </td>
                   </tr>`).join("")}
               </tbody>
               <tfoot class="table-light fw-bold">
                 <tr>
                   <td colspan="3" class="text-end">Total abonado:</td>
-                  <td colspan="2" class="text-success">$${data.abonos.reduce((s, a) => s + a.monto, 0).toFixed(2)}</td>
+                  <td colspan="3" class="text-success">$${data.abonos.reduce((s, a) => s + a.monto, 0).toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>`;
@@ -171,55 +164,54 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 💵 Reactivar cliente (sin recargar)
-  document.querySelectorAll(".form-abono-cancelado").forEach((form) => {
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const input = form.querySelector(".abono-input");
-      const id = form.dataset.id;
-      const valor = parseFloat(input.value || 0);
-      if (valor <= 0) return;
+  // 🗑️ Eliminar abono (desde el modal). Si se reactiva, sacar fila de cancelados y llevar al index resaltado.
+  document.addEventListener("click", async (e) => {
+    if (!e.target.classList.contains("eliminar-abono")) return;
 
-      input.disabled = true;
-      form.querySelector("button").disabled = true;
-      input.classList.add("bg-warning");
+    const abonoId = e.target.dataset.id;
+    const clienteId = e.target.dataset.cliente;
 
-      try {
-        const resp = await fetch(`/reactivar_cliente/${id}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-Requested-With": "fetch"
-          },
-          body: new URLSearchParams({ abono: valor }),
-        });
+    if (!confirm("¿Seguro que deseas eliminar este abono?")) return;
 
-        const data = await resp.json();
+    try {
+      const res = await fetch(`/eliminar_abono/${abonoId}`, {
+        method: "POST",
+        headers: { "X-Requested-With": "fetch" }
+      });
+      const data = await res.json();
 
-        if (data.ok) {
-          const fila = document.getElementById(`cliente-${id}`);
-          fila.classList.add("table-success");
-          fila.style.transition = "opacity 0.8s ease";
-          fila.style.opacity = "0";
-          setTimeout(() => fila.remove(), 800);
-
-          mostrarToast(`✅ ${data.nombre} reactivado con abono $${valor.toFixed(2)}.`, "success");
-        } else {
-          mostrarToast(`⚠️ ${data.error || "Error al reactivar cliente."}`, "warning");
-        }
-      } catch (err) {
-        mostrarToast("❌ Error al conectar con el servidor.", "danger");
-        console.error("⚠️ Error detallado:", err);
-      } finally {
-        input.disabled = false;
-        form.querySelector("button").disabled = false;
-        input.classList.remove("bg-warning");
-        input.value = "";
+      if (!res.ok || !data.ok) {
+        mostrarToast(`❌ ${data.error || "No se pudo eliminar el abono."}`, "danger");
+        return;
       }
-    });
+
+      // Quitar la fila del abono en el modal
+      const filaAbono = document.getElementById(`abono-row-${abonoId}`);
+      if (filaAbono) filaAbono.remove();
+
+      // Si el cliente fue reactivado → quitarlo de la tabla de cancelados y mandar al índice con resaltado
+      if (data.reactivado) {
+        const filaCliente = document.getElementById(`cliente-${clienteId}`);
+        if (filaCliente) {
+          filaCliente.classList.add("table-success");
+          filaCliente.style.transition = "opacity 0.8s ease";
+          filaCliente.style.opacity = "0";
+          setTimeout(() => filaCliente.remove(), 800);
+        }
+        mostrarToast("🔁 Cliente reactivado automáticamente.", "success");
+        setTimeout(() => { window.location.href = `/?resaltar=${clienteId}`; }, 900);
+      } else {
+        // Solo feedback si no cambió de estado
+        mostrarToast("🗑️ Abono eliminado.", "info");
+      }
+
+    } catch (err) {
+      mostrarToast("❌ Error de conexión al eliminar abono.", "danger");
+      console.error(err);
+    }
   });
 
-  // 🔔 Función toast flotante
+  // 🔔 Toast
   function mostrarToast(mensaje, tipo="info") {
     const colores = { success:"alert-success", warning:"alert-warning", danger:"alert-danger", info:"alert-info" };
     const toast = document.createElement("div");
@@ -227,13 +219,12 @@ document.addEventListener("DOMContentLoaded", () => {
     toast.style.zIndex = 2000;
     toast.textContent = mensaje;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    setTimeout(() => toast.remove(), 3500);
   }
 });
 </script>
 
 <style>
-.abono-td form { align-items: center; justify-content: center; gap: 0.3em; }
 .table-success { background-color: #d1e7dd !important; transition: all 0.6s ease; }
 
 /* 🎨 Modal de abonos */

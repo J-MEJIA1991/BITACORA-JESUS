@@ -1,4 +1,3 @@
-
 # ======================================================
 # app.py — versión FINAL y sincronizada (hora local Chile 🇨🇱)
 # ======================================================
@@ -7,7 +6,7 @@ import os
 from functools import wraps
 from flask import Flask, session, redirect, url_for, flash
 from flask_migrate import Migrate
-from extensions import db
+from extensions import db, cache   # ✅ importamos cache también
 
 # ---------------------------
 # ⏰ Importar módulo de tiempo centralizado
@@ -23,7 +22,6 @@ app.secret_key = os.environ.get("APP_SECRET", "clave_secreta_local_cámbiala")
 # ======================================================
 # 🕒 Registrar funciones globales para Jinja (uso en HTML)
 # ======================================================
-# 🔹 Permite usar {{ hora_actual() }}, {{ hora_chile() }} y el filtro |hora_chile
 app.jinja_env.globals.update(hora_actual=hora_actual)
 app.jinja_env.filters["hora_chile"] = hora_chile
 app.jinja_env.globals.update(hora_chile=hora_chile)
@@ -73,6 +71,9 @@ app.register_blueprint(app_rutas)
 # ======================================================
 db.init_app(app)
 migrate = Migrate(app, db)
+
+# ✅ INICIALIZAR CACHE
+cache.init_app(app, config={"CACHE_TYPE": "simple"})
 
 # ======================================================
 # 🗃️ Crear tablas si no existen
