@@ -6,43 +6,71 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-  <!-- ✅ Highlight verde para cliente reactivado o cliente creado -->
   <style>
-  .resaltado-reactivado {
-    background-color: #28a745 !important;
-    transition: background-color 1.5s ease-out;
-  }
-  .resaltado-reactivado.fade-out {
-    background-color: transparent !important;
-  }
+    html, body {
+      height: auto !important;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      background-color: #f8f9fa;
+    }
+    main.container-fluid {
+      flex: 1 0 auto;
+    }
+    footer {
+      flex-shrink: 0;
+      background-color: #212529;
+      color: #ccc;
+      padding: 10px 0;
+    }
+    .resaltado-reactivado {
+      background-color: #28a745 !important;
+      transition: background-color 1.5s ease-out;
+    }
+    .resaltado-reactivado.fade-out {
+      background-color: transparent !important;
+    }
   </style>
 
-  <!-- 🔊 Sonido al reactivar / crear cliente -->
   <audio id="audioReactivaCliente">
     <source src="https://cdn.jsdelivr.net/gh/ManzDev/sounds/coin.mp3" type="audio/mpeg">
   </audio>
-
 </head>
 
-<body class="bg-light">
+<body>
+
   <!-- 🔝 Barra de navegación -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
     <div class="container-fluid">
-      <a class="navbar-brand" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
-      <div>
-        <a href="{{ url_for('app_rutas.index') }}" class="btn btn-outline-light btn-sm me-2">Inicio</a>
-        <a href="{{ url_for('app_rutas.liquidacion_view') }}" class="btn btn-outline-light btn-sm me-2">Liquidación</a>
+      <a class="navbar-brand fw-bold" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
 
-        <!-- 🆕 Botón de Nuevo Cliente (abre modal) -->
-        <button id="btnNuevoCliente" class="btn btn-outline-light btn-sm me-2">Nuevo Cliente</button>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-controls="menuPrincipal" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
 
-        <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm">Salir</a>
+      <div class="collapse navbar-collapse justify-content-end" id="menuPrincipal">
+        <ul class="navbar-nav mb-2 mb-lg-0">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.index') }}">🏠 Inicio</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.liquidacion_view') }}">📊 Liquidación</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.clientes_cancelados_view') }}">🚫 Cancelados</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.dashboard') }}">📈 Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.ganancias_mes_view') }}">💰 Ganancias</a></li>
+          <li class="nav-item">
+            <button id="btnNuevoCliente" class="btn btn-outline-light btn-sm ms-2">➕ Nuevo Cliente</button>
+          </li>
+        </ul>
+
+        <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm ms-lg-3 mt-2 mt-lg-0">Salir ✖</a>
       </div>
     </div>
   </nav>
 
   <!-- 🧾 Contenido principal -->
-  <div class="container mb-5">
+  <main class="container-fluid mb-4">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -54,14 +82,14 @@
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
-  </div>
+  </main>
 
   <!-- 🦶 Pie de página -->
-  <footer class="text-center mt-4 text-muted">
-    <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos - Desarrollado con ❤️ por Manuel Herrera</small>
+  <footer class="text-center">
+    <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos — Desarrollado con ❤️ por Manuel Herrera</small>
   </footer>
 
-  <!-- 🔄 Toast “Procesando...” flotante -->
+  <!-- 🔄 Toast “Procesando...” -->
   <div id="toastProcesando"
        style="display:none; position:fixed; top:20px; right:20px; z-index:3000;
               background:rgba(0,0,0,0.85); color:white; padding:10px 18px;
@@ -88,105 +116,87 @@
     </div>
   </div>
 
-  <!-- ⚙️ Script unificado -->
+  <!-- ⚙️ Scripts -->
   <script>
-  // funciones globales highlight / sonido / scroll SOLO para index
-  function reproducirSonidoReactivado(){
-    const a = document.getElementById("audioReactivaCliente");
-    if(a) a.play().catch(()=>{});
-  }
-
-  function resaltarClienteReactivado(id){
-    // solo si estamos en index
-    if(!window.location.pathname.endsWith("/")) return;
-    const fila = document.querySelector(`#cliente-row-${id}`);
-    if(!fila) return;
-    reproducirSonidoReactivado();
-    fila.classList.add("resaltado-reactivado");
-    setTimeout(()=>{ fila.classList.add("fade-out"); setTimeout(()=>{ fila.classList.remove("resaltado-reactivado","fade-out") },1500); },50);
-  }
-
-  function scrollToCliente(id){
-    // solo si estamos en index
-    if(!window.location.pathname.endsWith("/")) return;
-    const fila = document.querySelector(`#cliente-row-${id}`);
-    if(fila){
-      fila.scrollIntoView({ behavior:"smooth", block:"center" });
+    function reproducirSonidoReactivado(){
+      const a = document.getElementById("audioReactivaCliente");
+      if(a) a.play().catch(()=>{});
     }
-  }
-  </script>
-
-  <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const toast = document.getElementById("toastProcesando");
-    let visible = false;
-
-    function mostrarProcesando() {
-      if (visible) return;
-      visible = true;
-      toast.style.display = "block";
-      setTimeout(() => (toast.style.opacity = "1"), 50);
+    function resaltarClienteReactivado(id){
+      if(!window.location.pathname.endsWith("/")) return;
+      const fila = document.querySelector(`#cliente-row-${id}`);
+      if(!fila) return;
+      reproducirSonidoReactivado();
+      fila.classList.add("resaltado-reactivado");
+      setTimeout(()=>{ fila.classList.add("fade-out"); setTimeout(()=>{ fila.classList.remove("resaltado-reactivado","fade-out") },1500); },50);
+    }
+    function scrollToCliente(id){
+      if(!window.location.pathname.endsWith("/")) return;
+      const fila = document.querySelector(`#cliente-row-${id}`);
+      if(fila) fila.scrollIntoView({ behavior:"smooth", block:"center" });
     }
 
-    function ocultarProcesando() {
-      visible = false;
-      toast.style.opacity = "0";
-      setTimeout(() => (toast.style.display = "none"), 300);
-    }
+    document.addEventListener("DOMContentLoaded", () => {
+      const toast = document.getElementById("toastProcesando");
+      let visible = false;
 
-    window.mostrarProcesando = mostrarProcesando;
-    window.ocultarProcesando = ocultarProcesando;
+      function mostrarProcesando() {
+        if (visible) return;
+        visible = true;
+        toast.style.display = "block";
+        setTimeout(() => (toast.style.opacity = "1"), 50);
+      }
+      function ocultarProcesando() {
+        visible = false;
+        toast.style.opacity = "0";
+        setTimeout(() => (toast.style.display = "none"), 300);
+      }
+      window.mostrarProcesando = mostrarProcesando;
+      window.ocultarProcesando = ocultarProcesando;
 
-    document.querySelectorAll("form").forEach(form => {
-      form.addEventListener("submit", () => {
-        mostrarProcesando();
-        setTimeout(ocultarProcesando, 8000);
+      document.querySelectorAll("form").forEach(form => {
+        form.addEventListener("submit", () => {
+          mostrarProcesando();
+          setTimeout(ocultarProcesando, 8000);
+        });
       });
-    });
-
-    document.querySelectorAll("a[href]").forEach(link => {
-      const href = link.getAttribute("href");
-      if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
-      link.addEventListener("click", () => {
-        mostrarProcesando();
-        setTimeout(ocultarProcesando, 8000);
+      document.querySelectorAll("a[href]").forEach(link => {
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
+        link.addEventListener("click", () => {
+          mostrarProcesando();
+          setTimeout(ocultarProcesando, 8000);
+        });
       });
-    });
 
-    const modalNuevoCliente = new bootstrap.Modal(document.getElementById("modalNuevoCliente"));
-    const modalBody = document.getElementById("modalNuevoClienteBody");
-    const btnNuevoCliente = document.getElementById("btnNuevoCliente");
+      const modalNuevoCliente = new bootstrap.Modal(document.getElementById("modalNuevoCliente"));
+      const modalBody = document.getElementById("modalNuevoClienteBody");
+      const btnNuevoCliente = document.getElementById("btnNuevoCliente");
 
-    btnNuevoCliente.addEventListener("click", async () => {
-      modalBody.innerHTML = `
-        <div class="text-center text-muted py-5">
-          <div class="spinner-border text-primary" role="status"></div>
-          <p class="mt-3">Cargando formulario...</p>
-        </div>`;
-      modalNuevoCliente.show();
-
-      try {
-        mostrarProcesando();
-        const resp = await fetch("{{ url_for('app_rutas.nuevo_cliente') }}");
-        const html = await resp.text();
-        modalBody.innerHTML = html;
-      } catch (err) {
+      btnNuevoCliente.addEventListener("click", async () => {
         modalBody.innerHTML = `
-          <div class="alert alert-danger text-center mt-3">
+          <div class="text-center text-muted py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3">Cargando formulario...</p>
+          </div>`;
+        modalNuevoCliente.show();
+
+        try {
+          mostrarProcesando();
+          const resp = await fetch("{{ url_for('app_rutas.nuevo_cliente') }}");
+          const html = await resp.text();
+          modalBody.innerHTML = html;
+        } catch {
+          modalBody.innerHTML = `<div class="alert alert-danger text-center mt-3">
             ❌ Error al cargar el formulario. Intenta nuevamente.
           </div>`;
-        console.error("Error cargando formulario:", err);
-      } finally {
-        ocultarProcesando();
-      }
+        } finally {
+          ocultarProcesando();
+        }
+      });
+      window.addEventListener("load", ocultarProcesando);
     });
 
-    window.addEventListener("load", ocultarProcesando);
-  });
-  </script>
-
-  <!-- 🕒 Reloj dinámico Chile -->
-  <script>
     function actualizarRelojChile() {
       const opciones = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
       const ahoraChile = new Date().toLocaleTimeString('es-CL', opciones);
@@ -199,3 +209,5 @@
 
 </body>
 </html>
+
+

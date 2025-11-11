@@ -8,7 +8,6 @@ from flask import (
     Blueprint, render_template, request, redirect,
     url_for, flash, session, jsonify
 )
-from helpers import mes_actual_chile_bounds
 from functools import wraps
 from sqlalchemy import func
 from extensions import db
@@ -19,7 +18,8 @@ from helpers import (
     obtener_resumen_total,
     actualizar_liquidacion_por_movimiento,
 )
-from tiempo import hora_actual, to_hora_chile as hora_chile  # ✅ CORRECTO, sin import circular
+from tiempo import hora_actual, to_hora_chile as hora_chile, mes_actual_chile_bounds
+import tiempo
 
 
 # ======================================================
@@ -136,103 +136,119 @@ def dashboard():
     )
 
 
+
 # ======================================================
-# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (con CACHÉ DE DÍA)
+# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (FINAL)
 # ======================================================
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 from datetime import timedelta
 from flask import current_app
-import time
 
-# ⚙️ Caché en memoria (simple y segura)
+# caché memoria del día
 _cache_resumen = {"fecha": None, "data": None, "timestamp": 0}
 
 @app_rutas.route("/")
 @login_required
 def index():
-    from helpers import eliminar_cache_resumen_hoy
-    
-    # ✅ muy importante para evitar comportamiento raro al mover orden
-    eliminar_cache_resumen_hoy()
+    from helpers import eliminar_cache_resumen_hoy, obtener_resumen_total, actualizar_liquidacion_por_movimiento
+
+    eliminar_cache_resumen_hoy()  # evita corrupción visual después de mover orden
 
     hoy = local_date()
 
-    # ======================================================
-    # ⚡ Recuperar del caché si es del mismo día y reciente (< 30 s)
-    # ======================================================
+    # === USAR CACHE SI ES MISMO DÍA Y <30s ============================
+    import time
     if (
         _cache_resumen["fecha"] == hoy
         and time.time() - _cache_resumen["timestamp"] < 30
     ):
-        resumen_hoy = _cache_resumen["data"]["resumen_hoy"]
-        resumen_total = _cache_resumen["data"]["resumen_total"]
-        clientes = _cache_resumen["data"]["clientes"]
-        print("♻️  Usando caché de resumen del día (sin recalcular SQL)")
-    else:
-        print("⚙️  Calculando resumen y cargando clientes desde BD...")
-
-        # 🧾 Cargar todos los clientes activos + préstamos (consulta optimizada)
-        clientes = (
-            Cliente.query.options(joinedload(Cliente.prestamos))
-            .filter_by(cancelado=False)
-            .order_by(Cliente.orden.asc().nullsfirst(), Cliente.id.asc())
-            .all()
+        print("♻️ Cache index usado.")
+        data = _cache_resumen["data"]
+        return render_template(
+            "index.html",
+            clientes=data["clientes"],
+            resumen_hoy=data["resumen_hoy"],
+            resumen_total=data["resumen_total"],
+            hoy=hoy
         )
 
-        # 🔄 Reasignar orden si está roto
-        orden_cambiado = False
-        for idx, c in enumerate(clientes, start=1):
-            if not c.orden or c.orden != idx:
-                c.orden = idx
-                orden_cambiado = True
-        if orden_cambiado:
-            db.session.commit()
+    print("⚙️ Recalculando index...")
 
-        # 📆 Estado del plazo
-        subquery = (
-            db.session.query(
-                Prestamo.cliente_id, func.max(Prestamo.fecha).label("ultima_fecha")
+    # clientes activos ordenados
+    clientes = (
+        Cliente.query.options(joinedload(Cliente.prestamos))
+        .filter_by(cancelado=False)
+        .order_by(Cliente.orden.asc().nullsfirst(), Cliente.id.asc())
+        .all()
+    )
+
+    # reparar orden roto
+    orden_cambiado = False
+    for idx, c in enumerate(clientes, start=1):
+        if not c.orden or c.orden != idx:
+            c.orden = idx
+            orden_cambiado = True
+    if orden_cambiado:
+        db.session.commit()
+
+    # estado plazo
+    subquery = (
+        db.session.query(
+            Prestamo.cliente_id, func.max(Prestamo.fecha).label("ultima_fecha")
+        )
+        .group_by(Prestamo.cliente_id)
+        .subquery()
+    )
+    ultimos = dict(db.session.query(subquery.c.cliente_id, subquery.c.ultima_fecha).all())
+
+    for c in clientes:
+        estado = "normal"
+        ultima_fecha = ultimos.get(c.id)
+        if ultima_fecha:
+            p = (
+                Prestamo.query.filter_by(cliente_id=c.id, fecha=ultima_fecha).first()
             )
-            .group_by(Prestamo.cliente_id)
-            .subquery()
-        )
-        ultimos = dict(
-            db.session.query(subquery.c.cliente_id, subquery.c.ultima_fecha).all()
-        )
+            if p and p.plazo:
+                fecha_venc = p.fecha + timedelta(days=p.plazo)
+                dias_pasados = (hoy - fecha_venc).days
+                if 0 <= dias_pasados < 30:
+                    estado = "vencido"
+                elif dias_pasados >= 30:
+                    estado = "moroso"
+        c.estado_plazo = estado
 
-        for c in clientes:
-            estado = "normal"
-            ultima_fecha = ultimos.get(c.id)
-            if ultima_fecha:
-                p = (
-                    Prestamo.query.filter_by(cliente_id=c.id, fecha=ultima_fecha).first()
-                )
-                if p and p.plazo:
-                    fecha_venc = p.fecha + timedelta(days=p.plazo)
-                    dias_pasados = (hoy - fecha_venc).days
-                    if 0 <= dias_pasados < 30:
-                        estado = "vencido"
-                    elif dias_pasados >= 30:
-                        estado = "moroso"
-            c.estado_plazo = estado
+    # === resumen del día LOC contable =================================
+    liq_hoy = actualizar_liquidacion_por_movimiento(hoy, commit=False)
 
-        # 📊 Resumen del día (helpers.py)
-        from helpers import resumen_dia
-        from tiempo import day_range
+    resumen_hoy = {
+        "entradas": liq_hoy.entradas,
+        "entradas_caja": liq_hoy.entradas_caja,
+        "prestamos_hoy": liq_hoy.prestamos_hoy,
+        "salidas": liq_hoy.salidas,
+        "gastos": liq_hoy.gastos,
+        "caja_manual": liq_hoy.caja_manual,
+        "caja": liq_hoy.caja,
+    }
 
-        start, end = day_range(hoy)
-        resumen_hoy = resumen_dia(db, start, end)
-        resumen_total = obtener_resumen_total()
+    resumen_total = obtener_resumen_total()
 
-        # 💾 Guardar en caché
-        _cache_resumen["fecha"] = hoy
-        _cache_resumen["timestamp"] = time.time()
-        _cache_resumen["data"] = {
-            "resumen_hoy": resumen_hoy,
-            "resumen_total": resumen_total,
-            "clientes": clientes,
-        }
+    # === SAVE CACHE =====================================
+    _cache_resumen["fecha"] = hoy
+    _cache_resumen["data"] = {
+        "clientes": clientes,
+        "resumen_hoy": resumen_hoy,
+        "resumen_total": resumen_total,
+    }
+    _cache_resumen["timestamp"] = time.time()
+
+    return render_template(
+        "index.html",
+        clientes=clientes,
+        resumen_hoy=resumen_hoy,
+        resumen_total=resumen_total,
+        hoy=hoy
+    )
 
     # ======================================================
     # 📋 Renderizar plantilla
@@ -1067,6 +1083,54 @@ def registrar_abono_por_codigo():
 
 
 # ======================================================
+# 💹 GANANCIAS DEL MES — por interés
+# ======================================================
+@app_rutas.route("/ganancias_mes")
+@login_required
+def ganancias_mes_view():
+    # ✅ Se llama directamente desde el módulo tiempo
+    import tiempo
+    inicio, fin, _ahora = tiempo.mes_actual_chile_bounds()
+
+    q = (
+        db.session.query(Prestamo, Cliente)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .filter(Prestamo.fecha >= inicio, Prestamo.fecha <= fin)
+        .order_by(Prestamo.fecha.asc(), Cliente.codigo.asc())
+    )
+
+    filas = []
+    total_venta = 0
+    total_ganancia = 0
+
+    for p, c in q.all():
+        venta = float(p.monto or 0)
+        interes = float(p.interes or 0)
+        ganancia = venta * (interes / 100)
+
+        filas.append({
+            "codigo": c.codigo,
+            "fecha": p.fecha,
+            "nombre": c.nombre,
+            "venta": str(int(round(venta))),
+            "interes": str(interes),
+            "ganancia": str(int(round(ganancia))),
+        })
+
+        total_venta += int(round(venta))
+        total_ganancia += int(round(ganancia))
+
+    return render_template(
+        "ganancias_mes.html",
+        filas=filas,
+        total_venta=str(total_venta),
+        total_ganancia=str(total_ganancia),
+        fecha_inicio=inicio,
+        fecha_fin=fin
+    )
+
+
+# ======================================================
 # 🗑️ ELIMINAR ABONO (reactiva y recalcula caja histórica)
 # ======================================================
 @app_rutas.route("/eliminar_abono/<int:abono_id>", methods=["POST"])
@@ -1298,7 +1362,7 @@ def reparar_caja():
 
 
 # ======================================================
-# 📊 LIQUIDACIÓN — DÍA ACTUAL (CORREGIDA)
+# 📊 LIQUIDACIÓN DEL DÍA (con arrastre y totales coherentes)
 # ======================================================
 @app_rutas.route("/liquidacion")
 @login_required
@@ -1306,103 +1370,35 @@ def liquidacion_view():
     try:
         hoy = local_date()
 
-        # Buscar o crear liquidación del día
-        liq = Liquidacion.query.filter_by(fecha=hoy).first()
-        if not liq:
-            liq = crear_liquidacion_para_fecha(hoy)  # debe devolver un Liquidacion persistible
+        # 1) Garantiza registro de liquidación de hoy con caja_anterior arrastrada
+        crear_liquidacion_para_fecha(hoy)
 
-        start, end = day_range(hoy)
-
-        # 💰 Total abonos (ingresos por cuotas)
-        total_abonos = (
-            db.session.query(func.coalesce(func.sum(Abono.monto), 0.0))
-            .filter(Abono.fecha >= start, Abono.fecha < end)
-            .scalar() or 0.0
-        )
-
-        # 🏦 Total préstamos del día (desde Prestamo, consistente con Dashboard/Index)
-        total_prestamos = (
-            db.session.query(func.coalesce(func.sum(Prestamo.monto), 0.0))
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .filter(
-                Cliente.cancelado == False,
-                Prestamo.fecha >= start,
-                Prestamo.fecha < end
-            )
-            .scalar() or 0.0
-        )
-
-        # 💵 Entradas manuales
-        total_entradas_caja = (
-            db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
-            .filter(
-                MovimientoCaja.tipo == "entrada_manual",
-                MovimientoCaja.fecha >= start,
-                MovimientoCaja.fecha < end
-            )
-            .scalar() or 0.0
-        )
-
-        # 💸 Salidas
-        total_salidas = (
-            db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
-            .filter(
-                MovimientoCaja.tipo == "salida",
-                MovimientoCaja.fecha >= start,
-                MovimientoCaja.fecha < end
-            )
-            .scalar() or 0.0
-        )
-
-        # 🧾 Gastos
-        total_gastos = (
-            db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
-            .filter(
-                MovimientoCaja.tipo == "gasto",
-                MovimientoCaja.fecha >= start,
-                MovimientoCaja.fecha < end
-            )
-            .scalar() or 0.0
-        )
-
-        # 💼 Caja del día (misma fórmula que Dashboard/Index)
-        total_caja = total_abonos + total_entradas_caja - (total_prestamos + total_salidas + total_gastos)
-
-        # 🔄 Actualizar objeto Liquidacion con los nombres REALES de columnas
-        #    (según usas en /liquidaciones y en tus plantillas)
-        liq.entradas       = total_abonos        # 👈 antes ponías liq.abonos (NO existe)
-        liq.prestamos_hoy  = total_prestamos
-        liq.entradas_caja  = total_entradas_caja
-        liq.salidas        = total_salidas
-        liq.gastos         = total_gastos
-        liq.caja           = total_caja
-
-        db.session.add(liq)
+        # 2) Recalcula totales del día usando movimientos y abonos (no doble commit)
+        liq = actualizar_liquidacion_por_movimiento(hoy, commit=False)
         db.session.commit()
 
-        # 📊 Resumen general
+        # 3) Resumen global (caja total acumulada y cartera)
         resumen = obtener_resumen_total()
-        cartera_total = resumen.get("cartera_total", 0.0)
+        cartera_total = float(resumen.get("cartera_total", 0.0))
 
+        # 4) Render compatible con plantilla `liquidacion.html`
         return render_template(
             "liquidacion.html",
             hoy=hoy,
             liq=liq,
-            liquidaciones=[liq],
-            total_caja=total_caja,
+            liquidaciones=[liq],            # para la tabla del día
+            total_caja=liq.caja,            # coincide con “Caja Final” del día
             cartera_total=cartera_total,
             resumen=resumen,
         )
 
     except Exception as e:
-        db.session.rollback()
-        print(f"[ERROR liquidacion_view] {e}")
+        print("[ERROR liquidacion_view]", e)
         flash("❌ Error al calcular la liquidación del día.", "danger")
         return redirect(url_for("app_rutas.index"))
 
-
 # ======================================================
-# 🗂️ LIQUIDACIONES — HISTÓRICO Y RANGO DE FECHAS (completo, con días vacíos)
+# 🗂️ LIQUIDACIONES — HISTÓRICO Y RANGO DE FECHAS (con días vacíos)
 # ======================================================
 @app_rutas.route("/liquidaciones", methods=["GET"])
 @login_required
@@ -1410,29 +1406,27 @@ def liquidaciones():
     fecha_desde = request.args.get("desde")
     fecha_hasta = request.args.get("hasta")
 
-    # Si no hay rango, mostrar últimos 10 registros
+    # 🔎 Sin rango: últimos 10 registros reales en BD
     if not fecha_desde or not fecha_hasta:
-        liquidaciones = (
-            Liquidacion.query.order_by(Liquidacion.fecha.desc()).limit(10).all()
-        )
+        items = Liquidacion.query.order_by(Liquidacion.fecha.desc()).limit(10).all()
         resumen = obtener_resumen_total()
         return render_template(
             "liquidaciones.html",
-            liquidaciones=liquidaciones,
+            liquidaciones=items,
             fecha_desde=None,
             fecha_hasta=None,
-            total_entradas=sum(l.entradas or 0 for l in liquidaciones),
-            total_prestamos=sum(l.prestamos_hoy or 0 for l in liquidaciones),
-            total_entradas_caja=sum(l.entradas_caja or 0 for l in liquidaciones),
-            total_salidas=sum(l.salidas or 0 for l in liquidaciones),
-            total_gastos=sum(l.gastos or 0 for l in liquidaciones),
-            total_caja=sum(l.caja or 0 for l in liquidaciones),
+            total_entradas=sum(l.entradas or 0 for l in items),
+            total_prestamos=sum(l.prestamos_hoy or 0 for l in items),
+            total_entradas_caja=sum(l.entradas_caja or 0 for l in items),
+            total_salidas=sum(l.salidas or 0 for l in items),
+            total_gastos=sum(l.gastos or 0 for l in items),
+            total_caja=sum(l.caja or 0 for l in items),
             resumen=resumen,
             hora_chile=hora_chile,
             hora_actual=hora_actual,
         )
 
-    # Convertir fechas
+    # 🗓️ Rango: normaliza fechas y rellena huecos
     try:
         desde = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
         hasta = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
@@ -1440,55 +1434,44 @@ def liquidaciones():
         flash("Formato de fecha inválido (use YYYY-MM-DD).", "danger")
         return redirect(url_for("app_rutas.liquidaciones"))
 
-    # Obtener liquidaciones existentes en ese rango
     registros = {
-        l.fecha: l for l in Liquidacion.query.filter(
+        l.fecha: l
+        for l in Liquidacion.query.filter(
             Liquidacion.fecha >= desde, Liquidacion.fecha <= hasta
         ).all()
     }
 
-    # Generar todas las fechas del rango
     dias = (hasta - desde).days + 1
-    liquidaciones = []
+    items = []
     for i in range(dias):
         fecha = desde + timedelta(days=i)
         liq = registros.get(fecha)
-
         if not liq:
-            # Crear un objeto "vacío" para mostrar en tabla
+            # objeto “visual” vacío para mostrar fila en la tabla
             liq = Liquidacion(
                 fecha=fecha,
-                caja_manual=0,
-                entradas=0,
-                entradas_caja=0,
-                prestamos_hoy=0,
-                salidas=0,
-                gastos=0,
-                caja=0,
+                caja_manual=0.0,
+                entradas=0.0,
+                entradas_caja=0.0,
+                prestamos_hoy=0.0,
+                salidas=0.0,
+                gastos=0.0,
+                caja=0.0,
             )
-        liquidaciones.append(liq)
-
-    # Calcular totales
-    total_entradas = sum(l.entradas or 0 for l in liquidaciones)
-    total_prestamos = sum(l.prestamos_hoy or 0 for l in liquidaciones)
-    total_entradas_caja = sum(l.entradas_caja or 0 for l in liquidaciones)
-    total_salidas = sum(l.salidas or 0 for l in liquidaciones)
-    total_gastos = sum(l.gastos or 0 for l in liquidaciones)
-    total_caja = sum(l.caja or 0 for l in liquidaciones)
+        items.append(liq)
 
     resumen = obtener_resumen_total()
-
     return render_template(
         "liquidaciones.html",
-        liquidaciones=liquidaciones,
+        liquidaciones=items,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
-        total_entradas=total_entradas,
-        total_prestamos=total_prestamos,
-        total_entradas_caja=total_entradas_caja,
-        total_salidas=total_salidas,
-        total_gastos=total_gastos,
-        total_caja=total_caja,
+        total_entradas=sum(l.entradas or 0 for l in items),
+        total_prestamos=sum(l.prestamos_hoy or 0 for l in items),
+        total_entradas_caja=sum(l.entradas_caja or 0 for l in items),
+        total_salidas=sum(l.salidas or 0 for l in items),
+        total_gastos=sum(l.gastos or 0 for l in items),
+        total_caja=sum(l.caja or 0 for l in items),
         resumen=resumen,
         hora_chile=hora_chile,
         hora_actual=hora_actual,
@@ -1587,52 +1570,6 @@ def prestamos_por_dia(fecha):
         fecha=fecha_obj,
         total_prestamos=total_prestamos,
     )
-
-@app_rutas.route("/ganancias_mes")
-def ganancias_mes_view():
-    inicio, fin, _ahora = mes_actual_chile_bounds()
-
-    q = (
-        db.session.query(Prestamo, Cliente)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .filter(Prestamo.fecha >= inicio, Prestamo.fecha <= fin)
-        .order_by(Prestamo.fecha.asc(), Cliente.codigo.asc())
-    )
-
-    filas = []
-    total_venta = 0
-    total_ganancia = 0
-
-    for p, c in q.all():
-        venta = float(p.monto or 0)
-        interes = float(p.interes or 0)
-        ganancia = venta * (interes / 100)
-
-        venta_i = int(round(venta))
-        ganancia_i = int(round(ganancia))
-
-        filas.append({
-            "codigo": c.codigo,
-            "fecha": p.fecha,
-            "nombre": c.nombre,
-            "venta": str(venta_i),
-            "interes": str(interes),
-            "ganancia": str(ganancia_i)
-        })
-
-        total_venta += venta_i
-        total_ganancia += ganancia_i
-
-    return render_template(
-        "ganancias_mes.html",
-        filas=filas,
-        total_venta=str(total_venta),
-        total_ganancia=str(total_ganancia),
-        fecha_inicio=inicio,
-        fecha_fin=fin
-    )
-
-
 
 # ======================================================
 # 🕒 TEST DE HORA LOCAL DE CHILE 🇨🇱
