@@ -289,19 +289,19 @@ def logout():
     return redirect(url_for("app_rutas.login"))
 
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con orden automático igual que index)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL + código único real)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
 def nuevo_cliente():
     from datetime import timedelta
     from sqlalchemy import func
-    from helpers import eliminar_cache_resumen_hoy
+    from helpers import eliminar_cache_resumen_hoy, generar_codigo_cliente
 
     if request.method == "POST":
         try:
             nombre = (request.form.get("nombre") or "").strip()
-            codigo = (request.form.get("codigo") or "").strip()
+            codigo_input = (request.form.get("codigo") or "").strip()
             direccion = (request.form.get("direccion") or "").strip()
             telefono = (request.form.get("telefono") or "").strip()
             monto = request.form.get("monto", type=float) or 0.0
@@ -310,6 +310,9 @@ def nuevo_cliente():
             orden = request.form.get("orden", type=int) or 0
             frecuencia = (request.form.get("frecuencia") or "diario").strip().lower()
 
+            # ======================================================
+            # 🔢 Validación del número de orden
+            # ======================================================
             if orden <= 0:
                 flash("El número de orden es inválido. Ese número no existe en la lista.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
@@ -318,15 +321,25 @@ def nuevo_cliente():
             if frecuencia not in FRECUENCIAS_VALIDAS:
                 frecuencia = "diario"
 
-            if not codigo:
-                flash("Debe ingresar un código de cliente.", "warning")
-                return redirect(url_for("app_rutas.nuevo_cliente"))
+            # ======================================================
+            # ❤️ CORRECCIÓN REAL DEL CÓDIGO UNÍCO
+            # ======================================================
+            if not codigo_input:
+                # Si no escribió nada → generar un código único garantizado
+                codigo = generar_codigo_cliente()
+            else:
+                # Si escribió un código → verificar si ya existe activo
+                existe = Cliente.query.filter_by(codigo=codigo_input).first()
+                if existe and not existe.cancelado:
+                    flash("Ese código ya está en uso por un cliente activo.", "warning")
+                    return redirect(url_for("app_rutas.nuevo_cliente"))
+                codigo = codigo_input
 
             hoy = local_date()
             cliente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ======================================================
-            # 🔁 Renovación de cliente cancelado
+            # 🔁 RENOVACIÓN DE CLIENTE CANCELADO
             # ======================================================
             if cliente and cliente.cancelado:
                 nuevo = Cliente(
@@ -343,14 +356,14 @@ def nuevo_cliente():
                 db.session.add(nuevo)
                 db.session.flush()
 
-                # mover otros para abajo (MISMA LÓGICA DEL INDEX)
+                # Reordenar otros
                 Cliente.query.filter(
                     Cliente.id != nuevo.id,
                     Cliente.cancelado == False,
                     Cliente.orden >= nuevo.orden
                 ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
-                # préstamo
+                # Crear préstamo si tiene monto
                 if monto > 0:
                     saldo_total = monto + (monto * (interes / 100.0))
                     prestamo = Prestamo(
@@ -377,18 +390,19 @@ def nuevo_cliente():
                 if monto > 0:
                     actualizar_liquidacion_por_movimiento(hoy, commit=False)
                     db.session.commit()
+
                 flash(f"Cliente {nuevo.nombre} renovado correctamente (histórico preservado).", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
             # ======================================================
-            # 🚫 Ya existe activo
+            # 🚫 CLIENTE YA EXISTE ACTIVO
             # ======================================================
             if cliente and not cliente.cancelado:
                 flash("Ese código ya pertenece a un cliente activo.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ======================================================
-            # 🆕 Nuevo cliente
+            # 🆕 CREAR NUEVO CLIENTE
             # ======================================================
             nuevo = Cliente(
                 nombre=nombre or codigo,
@@ -402,14 +416,14 @@ def nuevo_cliente():
             db.session.add(nuevo)
             db.session.flush()
 
-            # mover otros para abajo exactamente igual que index
+            # Reorganizar órdenes (misma lógica del index)
             Cliente.query.filter(
                 Cliente.id != nuevo.id,
                 Cliente.cancelado == False,
                 Cliente.orden >= nuevo.orden
             ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
-            # préstamo inicial
+            # Préstamo inicial
             if monto > 0:
                 saldo_total = monto + (monto * (interes / 100.0))
                 prestamo = Prestamo(
@@ -446,13 +460,16 @@ def nuevo_cliente():
             flash("Ocurrió un error inesperado al crear o renovar el cliente.", "danger")
             return redirect(url_for("app_rutas.nuevo_cliente"))
 
-    # GET
+    # ======================================================
+    # GET — Generar código sugerido
+    # ======================================================
     try:
         codigo_sugerido = generar_codigo_cliente()
     except Exception:
         codigo_sugerido = "000000"
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
+
 
 # ======================================================
 # 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
