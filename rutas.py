@@ -289,19 +289,19 @@ def logout():
     return redirect(url_for("app_rutas.login"))
 
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL + código único real)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con orden automático igual que index)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
 def nuevo_cliente():
     from datetime import timedelta
     from sqlalchemy import func
-    from helpers import eliminar_cache_resumen_hoy, generar_codigo_cliente
+    from helpers import eliminar_cache_resumen_hoy
 
     if request.method == "POST":
         try:
             nombre = (request.form.get("nombre") or "").strip()
-            codigo_input = (request.form.get("codigo") or "").strip()
+            codigo = (request.form.get("codigo") or "").strip()
             direccion = (request.form.get("direccion") or "").strip()
             telefono = (request.form.get("telefono") or "").strip()
             monto = request.form.get("monto", type=float) or 0.0
@@ -310,9 +310,6 @@ def nuevo_cliente():
             orden = request.form.get("orden", type=int) or 0
             frecuencia = (request.form.get("frecuencia") or "diario").strip().lower()
 
-            # ======================================================
-            # 🔢 Validación del número de orden
-            # ======================================================
             if orden <= 0:
                 flash("El número de orden es inválido. Ese número no existe en la lista.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
@@ -321,25 +318,15 @@ def nuevo_cliente():
             if frecuencia not in FRECUENCIAS_VALIDAS:
                 frecuencia = "diario"
 
-            # ======================================================
-            # ❤️ CORRECCIÓN REAL DEL CÓDIGO UNÍCO
-            # ======================================================
-            if not codigo_input:
-                # Si no escribió nada → generar un código único garantizado
-                codigo = generar_codigo_cliente()
-            else:
-                # Si escribió un código → verificar si ya existe activo
-                existe = Cliente.query.filter_by(codigo=codigo_input).first()
-                if existe and not existe.cancelado:
-                    flash("Ese código ya está en uso por un cliente activo.", "warning")
-                    return redirect(url_for("app_rutas.nuevo_cliente"))
-                codigo = codigo_input
+            if not codigo:
+                flash("Debe ingresar un código de cliente.", "warning")
+                return redirect(url_for("app_rutas.nuevo_cliente"))
 
             hoy = local_date()
             cliente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ======================================================
-            # 🔁 RENOVACIÓN DE CLIENTE CANCELADO
+            # 🔁 Renovación de cliente cancelado
             # ======================================================
             if cliente and cliente.cancelado:
                 nuevo = Cliente(
@@ -356,14 +343,14 @@ def nuevo_cliente():
                 db.session.add(nuevo)
                 db.session.flush()
 
-                # Reordenar otros
+                # mover otros para abajo (MISMA LÓGICA DEL INDEX)
                 Cliente.query.filter(
                     Cliente.id != nuevo.id,
                     Cliente.cancelado == False,
                     Cliente.orden >= nuevo.orden
                 ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
-                # Crear préstamo si tiene monto
+                # préstamo
                 if monto > 0:
                     saldo_total = monto + (monto * (interes / 100.0))
                     prestamo = Prestamo(
@@ -390,19 +377,18 @@ def nuevo_cliente():
                 if monto > 0:
                     actualizar_liquidacion_por_movimiento(hoy, commit=False)
                     db.session.commit()
-
                 flash(f"Cliente {nuevo.nombre} renovado correctamente (histórico preservado).", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
             # ======================================================
-            # 🚫 CLIENTE YA EXISTE ACTIVO
+            # 🚫 Ya existe activo
             # ======================================================
             if cliente and not cliente.cancelado:
                 flash("Ese código ya pertenece a un cliente activo.", "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ======================================================
-            # 🆕 CREAR NUEVO CLIENTE
+            # 🆕 Nuevo cliente
             # ======================================================
             nuevo = Cliente(
                 nombre=nombre or codigo,
@@ -416,14 +402,14 @@ def nuevo_cliente():
             db.session.add(nuevo)
             db.session.flush()
 
-            # Reorganizar órdenes (misma lógica del index)
+            # mover otros para abajo exactamente igual que index
             Cliente.query.filter(
                 Cliente.id != nuevo.id,
                 Cliente.cancelado == False,
                 Cliente.orden >= nuevo.orden
             ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
-            # Préstamo inicial
+            # préstamo inicial
             if monto > 0:
                 saldo_total = monto + (monto * (interes / 100.0))
                 prestamo = Prestamo(
@@ -460,16 +446,13 @@ def nuevo_cliente():
             flash("Ocurrió un error inesperado al crear o renovar el cliente.", "danger")
             return redirect(url_for("app_rutas.nuevo_cliente"))
 
-    # ======================================================
-    # GET — Generar código sugerido
-    # ======================================================
+    # GET
     try:
         codigo_sugerido = generar_codigo_cliente()
     except Exception:
         codigo_sugerido = "000000"
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
-
 
 # ======================================================
 # 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
@@ -830,12 +813,13 @@ def eliminar_cliente(cliente_id):
         return redirect(url_for("app_rutas.index"))
 
 # ======================================================
-# 💵 OTORGAR PRÉSTAMO A CLIENTE
+# 💵 OTORGAR PRÉSTAMO A CLIENTE (VERSIÓN CORREGIDA)
 # ======================================================
 @app_rutas.route("/otorgar_prestamo/<int:cliente_id>", methods=["POST"])
 @login_required
 def otorgar_prestamo(cliente_id):
     cliente = Cliente.query.get_or_404(cliente_id)
+
     try:
         monto = float(request.form.get("monto", 0))
         interes = float(request.form.get("interes", 0))
@@ -848,31 +832,61 @@ def otorgar_prestamo(cliente_id):
         flash("El monto debe ser mayor a 0", "warning")
         return redirect(url_for("app_rutas.index"))
 
+    hoy = local_date()
+
+    # 🔒 (Opcional) NO permitir otro préstamo si ya tiene uno con saldo > 0
+    prestamo_activo = (
+        Prestamo.query
+        .filter(Prestamo.cliente_id == cliente.id, Prestamo.saldo > 0)
+        .order_by(Prestamo.fecha.desc())
+        .first()
+    )
+    if prestamo_activo:
+        flash("Este cliente ya tiene un préstamo activo.", "warning")
+        return redirect(url_for("app_rutas.index", focus_abono=cliente.id))
+
+    # 💰 Calcular saldo total con interés
     saldo_con_interes = monto + (monto * (interes / 100.0))
+
+    # 🧾 Crear préstamo nuevo
     prestamo = Prestamo(
         cliente_id=cliente.id,
         monto=monto,
         interes=interes,
         plazo=plazo,
-        fecha=local_date(),
+        fecha=hoy,
         saldo=saldo_con_interes,
+        frecuencia="diario",              # o lo que uses por defecto
+        ultima_aplicacion_interes=hoy,    # para que quede coherente
     )
     db.session.add(prestamo)
 
+    # 🧍‍♂️ Sincronizar el CLIENTE con este nuevo préstamo
+    cliente.monto = monto
+    cliente.interes = interes
+    cliente.plazo = plazo
+    cliente.saldo = saldo_con_interes
+    cliente.cancelado = False           # ✅ quedará "activo"
+    cliente.ultimo_abono_fecha = None   # todavía no tiene abonos
+
+    # 💸 Registrar movimiento en caja (yo usaría tipo="prestamo" para unificar)
     mov = MovimientoCaja(
-        tipo="salida",
+        tipo="prestamo",  # 👈 antes tenías "salida"; si en otros lados usas "prestamo", mejor esto
         monto=monto,
         descripcion=f"Préstamo a {cliente.nombre}",
-        fecha=hora_actual(),  # ✅ hora real convertida a UTC
+        fecha=hora_actual(),
     )
     db.session.add(mov)
+
+    # 🧮 Actualizar cache / liquidación
+    eliminar_cache_resumen_hoy()
     db.session.commit()
 
-    actualizar_liquidacion_por_movimiento(local_date())
+    actualizar_liquidacion_por_movimiento(hoy, commit=False)
+    db.session.commit()
 
-    flash(f"Préstamo de ${monto:.2f} otorgado a {cliente.nombre}", "success")
-    return redirect(url_for("app_rutas.index"))
-
+    flash(f"Préstamo de ${monto:.0f} otorgado a {cliente.nombre}", "success")
+    return redirect(url_for("app_rutas.index", focus_abono=cliente.id))
 
 # ======================================================
 # 🧾 HISTORIAL DE ABONOS — para modal (vista cancelados)
