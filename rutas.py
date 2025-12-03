@@ -289,7 +289,7 @@ def logout():
     return redirect(url_for("app_rutas.login"))
 
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con orden automático igual que index)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con AJAX)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
@@ -299,6 +299,8 @@ def nuevo_cliente():
     from helpers import eliminar_cache_resumen_hoy
 
     if request.method == "POST":
+        es_fetch = request.headers.get("X-Requested-With") == "fetch"
+
         try:
             nombre = (request.form.get("nombre") or "").strip()
             codigo = (request.form.get("codigo") or "").strip()
@@ -311,7 +313,10 @@ def nuevo_cliente():
             frecuencia = (request.form.get("frecuencia") or "diario").strip().lower()
 
             if orden <= 0:
-                flash("El número de orden es inválido. Ese número no existe en la lista.", "warning")
+                msg = "El número de orden es inválido."
+                if es_fetch:
+                    return jsonify({"ok": False, "error": msg}), 400
+                flash(msg, "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             FRECUENCIAS_VALIDAS = {"diario", "semanal", "quincenal", "mensual"}
@@ -319,14 +324,17 @@ def nuevo_cliente():
                 frecuencia = "diario"
 
             if not codigo:
-                flash("Debe ingresar un código de cliente.", "warning")
+                msg = "Debe ingresar un código de cliente."
+                if es_fetch:
+                    return jsonify({"ok": False, "error": msg}), 400
+                flash(msg, "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             hoy = local_date()
             cliente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ======================================================
-            # 🔁 Renovación de cliente cancelado
+            # 🔁 RENOVACIÓN
             # ======================================================
             if cliente and cliente.cancelado:
                 nuevo = Cliente(
@@ -343,11 +351,11 @@ def nuevo_cliente():
                 db.session.add(nuevo)
                 db.session.flush()
 
-                # mover otros para abajo (MISMA LÓGICA DEL INDEX)
+                # reordenar
                 Cliente.query.filter(
                     Cliente.id != nuevo.id,
                     Cliente.cancelado == False,
-                    Cliente.orden >= nuevo.orden
+                    Cliente.orden >= nuevo.orden,
                 ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
                 # préstamo
@@ -377,18 +385,37 @@ def nuevo_cliente():
                 if monto > 0:
                     actualizar_liquidacion_por_movimiento(hoy, commit=False)
                     db.session.commit()
-                flash(f"Cliente {nuevo.nombre} renovado correctamente (histórico preservado).", "success")
+
+                # ==== RESPUESTA AJAX ====
+                if es_fetch:
+                    return jsonify({
+                        "ok": True,
+                        "cliente": {
+                            "id": nuevo.id,
+                            "nombre": nuevo.nombre,
+                            "codigo": nuevo.codigo,
+                            "orden": nuevo.orden,
+                            "saldo": float(nuevo.saldo or 0),
+                            "ultimo_abono": 0.0,
+                            "cancelado": False,
+                        }
+                    }), 200
+
+                flash(f"Cliente {nuevo.nombre} renovado correctamente.", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
             # ======================================================
-            # 🚫 Ya existe activo
+            # ❌ Ya existe activo
             # ======================================================
             if cliente and not cliente.cancelado:
-                flash("Ese código ya pertenece a un cliente activo.", "warning")
+                msg = "Ese código ya pertenece a un cliente activo."
+                if es_fetch:
+                    return jsonify({"ok": False, "error": msg}), 400
+                flash(msg, "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ======================================================
-            # 🆕 Nuevo cliente
+            # 🆕 NUEVO CLIENTE
             # ======================================================
             nuevo = Cliente(
                 nombre=nombre or codigo,
@@ -402,7 +429,7 @@ def nuevo_cliente():
             db.session.add(nuevo)
             db.session.flush()
 
-            # mover otros para abajo exactamente igual que index
+            # reordenar
             Cliente.query.filter(
                 Cliente.id != nuevo.id,
                 Cliente.cancelado == False,
@@ -410,6 +437,7 @@ def nuevo_cliente():
             ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
             # préstamo inicial
+            saldo_total = 0
             if monto > 0:
                 saldo_total = monto + (monto * (interes / 100.0))
                 prestamo = Prestamo(
@@ -437,13 +465,33 @@ def nuevo_cliente():
                 actualizar_liquidacion_por_movimiento(hoy, commit=False)
                 db.session.commit()
 
+            # ======================================================
+            # 🎯 RESPUESTA AJAX (creación nueva)
+            # ======================================================
+            if es_fetch:
+                return jsonify({
+                    "ok": True,
+                    "cliente": {
+                        "id": nuevo.id,
+                        "nombre": nuevo.nombre,
+                        "codigo": nuevo.codigo,
+                        "orden": nuevo.orden,
+                        "saldo": float(nuevo.saldo or 0),
+                        "ultimo_abono": 0.0,
+                        "cancelado": False,
+                    }
+                }), 200
+
+            # Navegador normal (sin AJAX)
             flash(f"Cliente {nuevo.nombre} creado correctamente.", "success")
             return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
         except Exception as e:
             db.session.rollback()
             print(f"[ERROR nuevo_cliente] {e}")
-            flash("Ocurrió un error inesperado al crear o renovar el cliente.", "danger")
+            if es_fetch:
+                return jsonify({"ok": False, "error": "Error inesperado."}), 500
+            flash("Ocurrió un error inesperado.", "danger")
             return redirect(url_for("app_rutas.nuevo_cliente"))
 
     # GET
@@ -453,6 +501,7 @@ def nuevo_cliente():
         codigo_sugerido = "000000"
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
+
 
 # ======================================================
 # 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
@@ -996,7 +1045,6 @@ def historial_abonos_json(cliente_id):
         "abonos": data_abonos
     })
 
-
 # ======================================================
 # 💰 REGISTRAR ABONO POR CÓDIGO (versión estable, permite abonar cancelados)
 # ======================================================
@@ -1111,7 +1159,6 @@ def registrar_abono_por_codigo():
     if cancelado:
         flash(f"✅ {cliente.nombre} quedó en saldo 0 y fue movido a cancelados.", "info")
     return redirect(url_for("app_rutas.index"))
-
 
 # ======================================================
 # 💹 GANANCIAS DEL MES — por interés
