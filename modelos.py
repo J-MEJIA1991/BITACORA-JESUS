@@ -22,7 +22,13 @@ class Cliente(db.Model):
     saldo = db.Column(db.Float, default=0.0)
     ultimo_abono_fecha = db.Column(db.Date)
 
-    prestamos = db.relationship("Prestamo", backref="cliente", lazy=True)
+    # ⚠️ IMPORTANTE: usar selectin para evitar N+1 queries
+    prestamos = db.relationship(
+        "Prestamo",
+        backref="cliente",
+        lazy="selectin",          # 👈 antes estaba lazy=True
+        cascade="all, delete-orphan"
+    )
 
     # ---------------------------------------------------
     # 🔹 FUNCIONES DE CÁLCULO Y ESTADO
@@ -30,27 +36,27 @@ class Cliente(db.Model):
     def saldo_total(self):
         if not self.prestamos:
             return float(self.saldo or 0.0)
-        ultimo = max(self.prestamos, key=lambda p: p.fecha)
-        return float(ultimo.saldo or 0.0)
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
+        return float(u.saldo or 0.0)
 
     def capital_total(self):
         if not self.prestamos:
             return 0.0
-        u = max(self.prestamos, key=lambda p: p.fecha)
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
         total = u.monto + (u.monto * (u.interes or 0) / 100)
         return float(total)
 
     def capital_total_sin_interes(self):
         if not self.prestamos:
             return float(self.saldo or 0.0)
-        u = max(self.prestamos, key=lambda p: p.fecha)
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
         return float(u.monto or 0.0)
 
     def cuota_total(self):
         if not self.prestamos:
             return 0.0
 
-        u = max(self.prestamos, key=lambda p: p.fecha)
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
         if not u.plazo or u.plazo <= 0:
             return 0.0
 
@@ -73,7 +79,7 @@ class Cliente(db.Model):
         if not self.prestamos:
             return 0
 
-        u = max(self.prestamos, key=lambda p: p.fecha)
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
         if not u.plazo or not u.fecha:
             return 0
 
@@ -95,14 +101,24 @@ class Cliente(db.Model):
         return min(cuotas, u.plazo)
 
     def ultimo_abono_monto(self):
+        """
+        Devuelve el monto del último abono del último préstamo,
+        o 0.0 si no hay préstamos o abonos.
+        IMPORTANTE: asume que prestamos y abonos ya vienen cargados
+        (gracias a lazy='selectin' en las relaciones y selectinload en la vista).
+        """
         if not self.prestamos:
             return 0.0
 
-        u = max(self.prestamos, key=lambda p: p.fecha)
+        # Último préstamo por fecha
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
+
+        # Si no hay abonos en ese préstamo → 0
         if not u.abonos:
             return 0.0
 
-        ultimo_abono = max(u.abonos, key=lambda a: a.fecha)
+        # Último abono por fecha
+        ultimo_abono = max(u.abonos, key=lambda a: a.fecha or date.min)
         return float(ultimo_abono.monto or 0.0)
 
 
@@ -119,12 +135,13 @@ class Prestamo(db.Model):
     frecuencia = db.Column(db.String(20), default="diario")
     ultima_aplicacion_interes = db.Column(db.Date, default=local_date)  # 🕒 Nuevo
 
-    # ✅ Relación corregida: elimina abonos al borrar préstamo
+    # ✅ Relación: elimina abonos al borrar préstamo
+    # ⚠️ También aquí usamos selectin para evitar N+1
     abonos = db.relationship(
         "Abono",
         backref="prestamo",
         cascade="all, delete-orphan",
-        lazy=True
+        lazy="selectin"   # 👈 antes era lazy=True
     )
 
 # ---------------------------------------------------

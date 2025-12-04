@@ -7,7 +7,14 @@
 
 <!-- =================== BOTONES PRINCIPALES =================== -->
 <div class="mb-3 d-flex flex-wrap gap-2">
-  <a class="btn btn-primary" href="{{ url_for('app_rutas.nuevo_cliente') }}">➕ Nuevo Cliente</a>
+  <!-- 🔹 Este botón usa el MISMO JS que el del menú hamburguesa -->
+  <button
+    type="button"
+    class="btn btn-primary"
+    data-open-nuevo-cliente="1">
+    ➕ Nuevo Cliente
+  </button>
+
   <a class="btn btn-secondary" href="{{ url_for('app_rutas.liquidacion_view') }}">📊 Ver Liquidación</a>
   <a class="btn btn-outline-dark" href="{{ url_for('app_rutas.clientes_cancelados_view') }}">🚫 Cancelados</a>
   <a class="btn btn-outline-primary" href="{{ url_for('app_rutas.dashboard') }}">📈 Dashboard</a>

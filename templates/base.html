@@ -60,7 +60,13 @@
           <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.dashboard') }}">📈 Dashboard</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('app_rutas.ganancias_mes_view') }}">💰 Ganancias</a></li>
           <li class="nav-item">
-            <button id="btnNuevoCliente" class="btn btn-outline-light btn-sm ms-2">➕ Nuevo Cliente</button>
+            <!-- 👇 ESTE BOTÓN ABRE EL MODAL -->
+            <button
+              type="button"
+              class="btn btn-outline-light btn-sm ms-2"
+              data-open-nuevo-cliente="1">
+              ➕ Nuevo Cliente
+            </button>
           </li>
         </ul>
 
@@ -118,23 +124,39 @@
 
   <!-- ⚙️ Scripts -->
   <script>
+    // ===================== SONIDO REACTIVAR =====================
     function reproducirSonidoReactivado(){
       const a = document.getElementById("audioReactivaCliente");
       if(a) a.play().catch(()=>{});
     }
     function resaltarClienteReactivado(id){
       if(!window.location.pathname.endsWith("/")) return;
-      const fila = document.querySelector(`#cliente-row-${id}`);
+      const fila = document.querySelector("#cliente-row-" + id);
       if(!fila) return;
       reproducirSonidoReactivado();
       fila.classList.add("resaltado-reactivado");
-      setTimeout(()=>{ fila.classList.add("fade-out"); setTimeout(()=>{ fila.classList.remove("resaltado-reactivado","fade-out") },1500); },50);
+      setTimeout(()=>{
+        fila.classList.add("fade-out");
+        setTimeout(()=>{
+          fila.classList.remove("resaltado-reactivado","fade-out");
+        },1500);
+      },50);
     }
     function scrollToCliente(id){
       if(!window.location.pathname.endsWith("/")) return;
-      const fila = document.querySelector(`#cliente-row-${id}`);
+      const fila = document.querySelector("#cliente-row-" + id);
       if(fila) fila.scrollIntoView({ behavior:"smooth", block:"center" });
     }
+
+    // ===================== RELOJ CHILE =====================
+    function actualizarRelojChile() {
+      const opciones = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+      const ahoraChile = new Date().toLocaleTimeString('es-CL', opciones);
+      const elemento = document.getElementById('horaChile');
+      if (elemento) elemento.textContent = ahoraChile;
+    }
+    setInterval(actualizarRelojChile, 1000);
+    actualizarRelojChile();
 
     document.addEventListener("DOMContentLoaded", () => {
       const toast = document.getElementById("toastProcesando");
@@ -154,6 +176,7 @@
       window.mostrarProcesando = mostrarProcesando;
       window.ocultarProcesando = ocultarProcesando;
 
+      // Mostrar "Procesando..." en formularios y links normales
       document.querySelectorAll("form").forEach(form => {
         form.addEventListener("submit", () => {
           mostrarProcesando();
@@ -169,11 +192,119 @@
         });
       });
 
-      const modalNuevoCliente = new bootstrap.Modal(document.getElementById("modalNuevoCliente"));
+      const modalEl   = document.getElementById("modalNuevoCliente");
       const modalBody = document.getElementById("modalNuevoClienteBody");
-      const btnNuevoCliente = document.getElementById("btnNuevoCliente");
+      const modalNuevoCliente = modalEl ? new bootstrap.Modal(modalEl) : null;
 
-      btnNuevoCliente.addEventListener("click", async () => {
+      // ========== FUNCIÓN PARA INICIALIZAR EL FORMULARIO DENTRO DEL MODAL ==========
+      function inicializarFormularioNuevoCliente() {
+        if (!modalBody) return;
+        const form = modalBody.querySelector("#formCliente");
+        if (!form) return;
+
+        const btnGenerarCodigo = modalBody.querySelector("#btnGenerarCodigo");
+        const codigo    = modalBody.querySelector("#codigo");
+        const monto     = modalBody.querySelector("#monto");
+        const interes   = modalBody.querySelector("#interes");
+        const plazo     = modalBody.querySelector("#plazo");
+        const frecuencia= modalBody.querySelector("#frecuencia");
+        const lblTotal  = modalBody.querySelector("#lblTotal");
+        const lblCuotas = modalBody.querySelector("#lblCuotas");
+        const lblCuota  = modalBody.querySelector("#lblCuota");
+
+        // ⚙️ Generar código aleatorio
+        if (btnGenerarCodigo && codigo) {
+          btnGenerarCodigo.addEventListener("click", () => {
+            let c = "";
+            const chars = "0123456789";
+            for (let i = 0; i < 6; i++) {
+              c += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            codigo.value = c;
+          });
+        }
+
+        // 📈 Cálculo de total, cuotas, valor de cuota
+        function calcular() {
+          const m = parseFloat(monto && monto.value ? monto.value : "0") || 0;
+          const i = parseFloat(interes && interes.value ? interes.value : "0") || 0;
+          const p = parseInt(plazo && plazo.value ? plazo.value : "0") || 0;
+          const f = frecuencia ? frecuencia.value : "diario";
+
+          if (!lblTotal || !lblCuotas || !lblCuota) return;
+
+          if (m <= 0 || p <= 0) {
+            lblTotal.textContent = "$0.00";
+            lblCuotas.textContent = "0";
+            lblCuota.textContent = "$0.00";
+            return;
+          }
+
+          const total = m + (m * (i / 100));
+          let cuotas = 0;
+
+          switch (f) {
+            case "diario":   cuotas = p; break;
+            case "semanal":  cuotas = Math.ceil(p / 7); break;
+            case "quincenal":cuotas = Math.ceil(p / 15); break;
+            case "mensual":  cuotas = Math.ceil(p / 30); break;
+          }
+          if (cuotas <= 0) cuotas = 1;
+
+          const valor = total / cuotas;
+
+          lblTotal.textContent  = "$" + total.toFixed(2);
+          lblCuotas.textContent = cuotas.toString();
+          lblCuota.textContent  = "$" + valor.toFixed(2);
+        }
+
+        [monto, interes, plazo, frecuencia].forEach(e => {
+          if (!e) return;
+          e.addEventListener("input", calcular);
+          e.addEventListener("change", calcular);
+        });
+
+        // 💾 Enviar formulario por AJAX
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+
+          try {
+            mostrarProcesando();
+            const res = await fetch(form.action, {
+              method: "POST",
+              body: fd,
+              headers: { "X-Requested-With": "fetch" }
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+              alert(data.error || "No se pudo crear el cliente.");
+              return;
+            }
+
+            // Opcional: guardar en sessionStorage
+            if (data.cliente) {
+              try {
+                sessionStorage.setItem("nuevo_cliente", JSON.stringify(data.cliente));
+              } catch {}
+            }
+
+            // Volver al index
+            window.location.href = "{{ url_for('app_rutas.index') }}";
+
+          } catch (err) {
+            console.error(err);
+            alert("Error al conectar con el servidor.");
+          } finally {
+            ocultarProcesando();
+          }
+        });
+      }
+
+      // ========== CARGAR FORMULARIO EN EL MODAL VIA FETCH ==========
+      async function cargarFormularioNuevoCliente() {
+        if (!modalNuevoCliente || !modalBody) return;
         modalBody.innerHTML = `
           <div class="text-center text-muted py-5">
             <div class="spinner-border text-primary" role="status"></div>
@@ -183,31 +314,38 @@
 
         try {
           mostrarProcesando();
-          const resp = await fetch("{{ url_for('app_rutas.nuevo_cliente') }}");
+          const resp = await fetch("{{ url_for('app_rutas.nuevo_cliente') }}", {
+            headers: { "X-Requested-With": "fetch" }
+          });
           const html = await resp.text();
           modalBody.innerHTML = html;
-        } catch {
-          modalBody.innerHTML = `<div class="alert alert-danger text-center mt-3">
-            ❌ Error al cargar el formulario. Intenta nuevamente.
-          </div>`;
+
+          // Muy importante: enganchar eventos en el formulario recién insertado
+          inicializarFormularioNuevoCliente();
+
+        } catch (err) {
+          console.error(err);
+          modalBody.innerHTML = `
+            <div class="alert alert-danger text-center mt-3">
+              ❌ Error al cargar el formulario. Intenta nuevamente.
+            </div>`;
         } finally {
           ocultarProcesando();
         }
+      }
+
+      // ========== BOTONES QUE ABREN EL MODAL DE NUEVO CLIENTE ==========
+      document.querySelectorAll("[data-open-nuevo-cliente]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          cargarFormularioNuevoCliente();
+        });
       });
+
+      // Ocultar toast al terminar de cargar la página
       window.addEventListener("load", ocultarProcesando);
     });
-
-    function actualizarRelojChile() {
-      const opciones = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-      const ahoraChile = new Date().toLocaleTimeString('es-CL', opciones);
-      const elemento = document.getElementById('horaChile');
-      if (elemento) elemento.textContent = ahoraChile;
-    }
-    setInterval(actualizarRelojChile, 1000);
-    actualizarRelojChile();
   </script>
 
 </body>
 </html>
-
-

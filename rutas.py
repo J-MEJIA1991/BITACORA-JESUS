@@ -3,13 +3,18 @@
 # ======================================================
 
 import os
+import time
+from threading import Thread
 from datetime import datetime, timedelta
+
 from flask import (
     Blueprint, render_template, request, redirect,
-    url_for, flash, session, jsonify
+    url_for, flash, session, jsonify, current_app
 )
 from functools import wraps
-from sqlalchemy import func
+from sqlalchemy import func, and_
+from sqlalchemy.orm import selectinload
+
 from extensions import db
 from modelos import Cliente, Prestamo, Abono, MovimientoCaja, Liquidacion
 from helpers import (
@@ -17,20 +22,59 @@ from helpers import (
     crear_liquidacion_para_fecha,
     obtener_resumen_total,
     actualizar_liquidacion_por_movimiento,
+    eliminar_cache_resumen_hoy,
 )
-from tiempo import hora_actual, to_hora_chile as hora_chile, mes_actual_chile_bounds
-import tiempo
-
-
-# ======================================================
-# 🕒 CONFIGURACIÓN HORARIA Y UTILIDADES
-# ======================================================
 from tiempo import (
     hora_actual,   # ✅ Devuelve hora local de Chile (sin tzinfo)
     local_date,    # ✅ Devuelve fecha local de Chile
     day_range,     # ✅ Devuelve inicio y fin del día local
-    to_hora_chile  # ✅ Convierte UTC → hora chilena legible
+    to_hora_chile as hora_chile,
+    mes_actual_chile_bounds,
 )
+import tiempo
+
+
+# ======================================================
+# 🧠 CACHÉ EN MEMORIA + RECÁLCULO EN SEGUNDO PLANO
+# ======================================================
+# caché memoria del día
+_cache_resumen = {"fecha": None, "data": None, "timestamp": 0}
+
+def recalcular_en_segundo_plano(app, fecha):
+    """Recalcula liquidación y resumen en un hilo separado."""
+    with app.app_context():
+        from helpers import (
+            eliminar_cache_resumen_hoy,
+            obtener_resumen_total,
+            actualizar_liquidacion_por_movimiento,
+        )
+
+        print("🧵 Iniciando recálculo en segundo plano...")
+
+        # limpiar cache, recalcular liquidación y resumen total
+        eliminar_cache_resumen_hoy()
+        liq_hoy = actualizar_liquidacion_por_movimiento(fecha, commit=True)
+        resumen_total = obtener_resumen_total()
+
+        global _cache_resumen
+        _cache_resumen["fecha"] = fecha
+        _cache_resumen["data"] = {
+            "clientes": None,  # los clientes se vuelven a leer en el index
+            "resumen_hoy": {
+                "entradas": liq_hoy.entradas,
+                "entradas_caja": liq_hoy.entradas_caja,
+                "prestamos_hoy": liq_hoy.prestamos_hoy,
+                "salidas": liq_hoy.salidas,
+                "gastos": liq_hoy.gastos,
+                "caja_manual": liq_hoy.caja_manual,
+                "caja": liq_hoy.caja,
+            },
+            "resumen_total": resumen_total,
+        }
+        _cache_resumen["timestamp"] = time.time()
+
+        print("✅ Recálculo en segundo plano terminado.")
+
 
 # ======================================================
 # 🔧 CONFIGURACIÓN DEL BLUEPRINT
@@ -43,6 +87,7 @@ app_rutas = Blueprint("app_rutas", __name__)
 VALID_USER = os.getenv("APP_USER", "j-mejia")
 VALID_PASS = os.getenv("APP_PASS", "honny")
 
+
 def login_required(f):
     """Protege las rutas que requieren sesión activa."""
     @wraps(f)
@@ -51,6 +96,7 @@ def login_required(f):
             return redirect(url_for("app_rutas.login"))
         return f(*args, **kwargs)
     return wrapper
+
 
 # ======================================================
 # 📊 DASHBOARD GENERAL — Créditos (versión corregida)
@@ -61,66 +107,59 @@ def dashboard():
     hoy = local_date()
     start, end = day_range(hoy)
 
-    # 🔹 Total de clientes activos
     total_clientes_activos = (
         db.session.query(func.count(Cliente.id))
         .filter(Cliente.cancelado == False)
         .scalar() or 0
     )
 
-    # 💰 Total de abonos del día
     total_abonos = (
         db.session.query(func.coalesce(func.sum(Abono.monto), 0.0))
         .filter(Abono.fecha >= start, Abono.fecha < end)
         .scalar() or 0.0
     )
 
-    # 🏦 Total de préstamos (desde Prestamo, no MovimientoCaja)
     total_prestamos = (
         db.session.query(func.coalesce(func.sum(Prestamo.monto), 0.0))
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .filter(
             Cliente.cancelado == False,
             Prestamo.fecha >= start,
-            Prestamo.fecha < end
+            Prestamo.fecha < end,
         )
         .scalar() or 0.0
     )
 
-    # 💵 Entradas manuales
     total_entradas = (
         db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
         .filter(
             MovimientoCaja.tipo == "entrada_manual",
             MovimientoCaja.fecha >= start,
-            MovimientoCaja.fecha < end
+            MovimientoCaja.fecha < end,
         )
         .scalar() or 0.0
     )
 
-    # 💸 Salidas
     total_salidas = (
         db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
         .filter(
             MovimientoCaja.tipo == "salida",
             MovimientoCaja.fecha >= start,
-            MovimientoCaja.fecha < end
+            MovimientoCaja.fecha < end,
         )
         .scalar() or 0.0
     )
 
-    # 🧾 Gastos
     total_gastos = (
         db.session.query(func.coalesce(func.sum(MovimientoCaja.monto), 0.0))
         .filter(
             MovimientoCaja.tipo == "gasto",
             MovimientoCaja.fecha >= start,
-            MovimientoCaja.fecha < end
+            MovimientoCaja.fecha < end,
         )
         .scalar() or 0.0
     )
 
-    # 📦 Caja total del día
     caja_total = total_abonos + total_entradas - (total_prestamos + total_salidas + total_gastos)
 
     return render_template(
@@ -136,32 +175,22 @@ def dashboard():
     )
 
 
-
 # ======================================================
-# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (FINAL)
+# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (OPTIMIZADA)
 # ======================================================
-from sqlalchemy.orm import joinedload
-from sqlalchemy import func
-from datetime import timedelta
-from flask import current_app
-
-# caché memoria del día
-_cache_resumen = {"fecha": None, "data": None, "timestamp": 0}
-
 @app_rutas.route("/")
 @login_required
 def index():
-    from helpers import eliminar_cache_resumen_hoy, obtener_resumen_total, actualizar_liquidacion_por_movimiento
-
     eliminar_cache_resumen_hoy()  # evita corrupción visual después de mover orden
 
     hoy = local_date()
 
     # === USAR CACHE SI ES MISMO DÍA Y <30s ============================
-    import time
+    ahora = time.time()
     if (
         _cache_resumen["fecha"] == hoy
-        and time.time() - _cache_resumen["timestamp"] < 30
+        and _cache_resumen["data"] is not None
+        and ahora - _cache_resumen["timestamp"] < 30
     ):
         print("♻️ Cache index usado.")
         data = _cache_resumen["data"]
@@ -170,20 +199,22 @@ def index():
             clientes=data["clientes"],
             resumen_hoy=data["resumen_hoy"],
             resumen_total=data["resumen_total"],
-            hoy=hoy
+            hoy=hoy,
         )
 
     print("⚙️ Recalculando index...")
 
-    # clientes activos ordenados
+    # 1) Cargar clientes + préstamos + abonos en lote
     clientes = (
-        Cliente.query.options(joinedload(Cliente.prestamos))
+        Cliente.query.options(
+            selectinload(Cliente.prestamos).selectinload(Prestamo.abonos)
+        )
         .filter_by(cancelado=False)
         .order_by(Cliente.orden.asc().nullsfirst(), Cliente.id.asc())
         .all()
     )
 
-    # reparar orden roto
+    # 2) Reparar orden roto
     orden_cambiado = False
     for idx, c in enumerate(clientes, start=1):
         if not c.orden or c.orden != idx:
@@ -192,33 +223,42 @@ def index():
     if orden_cambiado:
         db.session.commit()
 
-    # estado plazo
+    # 3) Estado de plazo sin N+1 queries
     subquery = (
         db.session.query(
-            Prestamo.cliente_id, func.max(Prestamo.fecha).label("ultima_fecha")
+            Prestamo.cliente_id,
+            func.max(Prestamo.fecha).label("ultima_fecha"),
         )
         .group_by(Prestamo.cliente_id)
         .subquery()
     )
-    ultimos = dict(db.session.query(subquery.c.cliente_id, subquery.c.ultima_fecha).all())
+
+    ultimos_prestamos = (
+        db.session.query(Prestamo)
+        .join(
+            subquery,
+            and_(
+                Prestamo.cliente_id == subquery.c.cliente_id,
+                Prestamo.fecha == subquery.c.ultima_fecha,
+            ),
+        )
+        .all()
+    )
+    mapa_ultimo_prestamo = {p.cliente_id: p for p in ultimos_prestamos}
 
     for c in clientes:
         estado = "normal"
-        ultima_fecha = ultimos.get(c.id)
-        if ultima_fecha:
-            p = (
-                Prestamo.query.filter_by(cliente_id=c.id, fecha=ultima_fecha).first()
-            )
-            if p and p.plazo:
-                fecha_venc = p.fecha + timedelta(days=p.plazo)
-                dias_pasados = (hoy - fecha_venc).days
-                if 0 <= dias_pasados < 30:
-                    estado = "vencido"
-                elif dias_pasados >= 30:
-                    estado = "moroso"
+        p = mapa_ultimo_prestamo.get(c.id)
+        if p and p.plazo:
+            fecha_venc = p.fecha + timedelta(days=p.plazo)
+            dias_pasados = (hoy - fecha_venc).days
+            if 0 <= dias_pasados < 30:
+                estado = "vencido"
+            elif dias_pasados >= 30:
+                estado = "moroso"
         c.estado_plazo = estado
 
-    # === resumen del día LOC contable =================================
+    # 4) Resumen del día (liquidación)
     liq_hoy = actualizar_liquidacion_por_movimiento(hoy, commit=False)
 
     resumen_hoy = {
@@ -231,40 +271,26 @@ def index():
         "caja": liq_hoy.caja,
     }
 
+    # 5) Resumen total
     resumen_total = obtener_resumen_total()
 
-    # === SAVE CACHE =====================================
+    # 6) Guardar en caché
     _cache_resumen["fecha"] = hoy
     _cache_resumen["data"] = {
         "clientes": clientes,
         "resumen_hoy": resumen_hoy,
         "resumen_total": resumen_total,
     }
-    _cache_resumen["timestamp"] = time.time()
+    _cache_resumen["timestamp"] = ahora
 
     return render_template(
         "index.html",
         clientes=clientes,
         resumen_hoy=resumen_hoy,
         resumen_total=resumen_total,
-        hoy=hoy
+        hoy=hoy,
     )
 
-    # ======================================================
-    # 📋 Renderizar plantilla
-    # ======================================================
-    return render_template(
-        "index.html",
-        clientes=clientes,
-        hoy=hoy,
-        resumen=resumen_total,
-        total_abonos=resumen_hoy["abonos"],
-        total_prestamos=resumen_hoy["prestamos"],
-        total_entradas=resumen_hoy["entradas"],
-        total_salidas=resumen_hoy["salidas"],
-        total_gastos=resumen_hoy["gastos"],
-        caja_total=resumen_hoy["caja_total"],
-    )
 
 # ======================================================
 # 🔐 LOGIN Y LOGOUT
@@ -285,19 +311,16 @@ def login():
 @app_rutas.route("/logout")
 def logout():
     session.pop("usuario", None)
-    flash("👋 Sesión cerrada correctamente.", "info")
+    flash("Sesión cerrada correctamente.", "info")
     return redirect(url_for("app_rutas.login"))
 
+
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con AJAX)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con AJAX + hilo)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
 def nuevo_cliente():
-    from datetime import timedelta
-    from sqlalchemy import func
-    from helpers import eliminar_cache_resumen_hoy
-
     if request.method == "POST":
         es_fetch = request.headers.get("X-Requested-With") == "fetch"
 
@@ -309,20 +332,15 @@ def nuevo_cliente():
             monto = request.form.get("monto", type=float) or 0.0
             interes = request.form.get("interes", type=float) or 0.0
             plazo = request.form.get("plazo", type=int) or 0
-            orden = request.form.get("orden", type=int) or 0
+            orden = request.form.get("orden", type=int)  # 👈 puede venir None
             frecuencia = (request.form.get("frecuencia") or "diario").strip().lower()
 
-            if orden <= 0:
-                msg = "El número de orden es inválido."
-                if es_fetch:
-                    return jsonify({"ok": False, "error": msg}), 400
-                flash(msg, "warning")
-                return redirect(url_for("app_rutas.nuevo_cliente"))
-
+            # 🔹 Frecuencia válida
             FRECUENCIAS_VALIDAS = {"diario", "semanal", "quincenal", "mensual"}
             if frecuencia not in FRECUENCIAS_VALIDAS:
                 frecuencia = "diario"
 
+            # 🔹 Código obligatorio (la clave del cliente)
             if not codigo:
                 msg = "Debe ingresar un código de cliente."
                 if es_fetch:
@@ -330,11 +348,21 @@ def nuevo_cliente():
                 flash(msg, "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
+            # 🔹 Si no viene orden o es inválido, lo calculamos al final de la lista
+            if not orden or orden <= 0:
+                max_orden = (
+                    db.session.query(func.coalesce(func.max(Cliente.orden), 0))
+                    .filter(Cliente.cancelado == False)
+                    .scalar()
+                    or 0
+                )
+                orden = max_orden + 1
+
             hoy = local_date()
             cliente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ======================================================
-            # 🔁 RENOVACIÓN
+            # 🔁 RENOVACIÓN (cliente cancelado)
             # ======================================================
             if cliente and cliente.cancelado:
                 nuevo = Cliente(
@@ -379,27 +407,31 @@ def nuevo_cliente():
                     nuevo.saldo = saldo_total
                     db.session.add_all([prestamo, mov])
 
-                eliminar_cache_resumen_hoy()
                 db.session.commit()
 
-                if monto > 0:
-                    actualizar_liquidacion_por_movimiento(hoy, commit=False)
-                    db.session.commit()
+                # 🧵 Recalcular pesado en segundo plano (app + fecha)
+                app = current_app._get_current_object()
+                Thread(
+                    target=recalcular_en_segundo_plano,
+                    args=(app, hoy),
+                    daemon=True,
+                ).start()
 
-                # ==== RESPUESTA AJAX ====
                 if es_fetch:
-                    return jsonify({
-                        "ok": True,
-                        "cliente": {
-                            "id": nuevo.id,
-                            "nombre": nuevo.nombre,
-                            "codigo": nuevo.codigo,
-                            "orden": nuevo.orden,
-                            "saldo": float(nuevo.saldo or 0),
-                            "ultimo_abono": 0.0,
-                            "cancelado": False,
+                    return jsonify(
+                        {
+                            "ok": True,
+                            "cliente": {
+                                "id": nuevo.id,
+                                "nombre": nuevo.nombre,
+                                "codigo": nuevo.codigo,
+                                "orden": nuevo.orden,
+                                "saldo": float(nuevo.saldo or 0),
+                                "ultimo_abono": 0.0,
+                                "cancelado": False,
+                            },
                         }
-                    }), 200
+                    ), 200
 
                 flash(f"Cliente {nuevo.nombre} renovado correctamente.", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
@@ -433,11 +465,11 @@ def nuevo_cliente():
             Cliente.query.filter(
                 Cliente.id != nuevo.id,
                 Cliente.cancelado == False,
-                Cliente.orden >= nuevo.orden
+                Cliente.orden >= nuevo.orden,
             ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
             # préstamo inicial
-            saldo_total = 0
+            saldo_total = 0.0
             if monto > 0:
                 saldo_total = monto + (monto * (interes / 100.0))
                 prestamo = Prestamo(
@@ -458,31 +490,32 @@ def nuevo_cliente():
                 nuevo.saldo = saldo_total
                 db.session.add_all([prestamo, mov])
 
-            eliminar_cache_resumen_hoy()
             db.session.commit()
 
-            if monto > 0:
-                actualizar_liquidacion_por_movimiento(hoy, commit=False)
-                db.session.commit()
+            # 🧵 Recalcular en segundo plano (app + fecha)
+            app = current_app._get_current_object()
+            Thread(
+                target=recalcular_en_segundo_plano,
+                args=(app, hoy),
+                daemon=True,
+            ).start()
 
-            # ======================================================
-            # 🎯 RESPUESTA AJAX (creación nueva)
-            # ======================================================
             if es_fetch:
-                return jsonify({
-                    "ok": True,
-                    "cliente": {
-                        "id": nuevo.id,
-                        "nombre": nuevo.nombre,
-                        "codigo": nuevo.codigo,
-                        "orden": nuevo.orden,
-                        "saldo": float(nuevo.saldo or 0),
-                        "ultimo_abono": 0.0,
-                        "cancelado": False,
+                return jsonify(
+                    {
+                        "ok": True,
+                        "cliente": {
+                            "id": nuevo.id,
+                            "nombre": nuevo.nombre,
+                            "codigo": nuevo.codigo,
+                            "orden": nuevo.orden,
+                            "saldo": float(nuevo.saldo or 0),
+                            "ultimo_abono": 0.0,
+                            "cancelado": False,
+                        }
                     }
-                }), 200
+                ), 200
 
-            # Navegador normal (sin AJAX)
             flash(f"Cliente {nuevo.nombre} creado correctamente.", "success")
             return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
@@ -501,7 +534,6 @@ def nuevo_cliente():
         codigo_sugerido = "000000"
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
-
 
 # ======================================================
 # 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
