@@ -365,33 +365,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    const data = sessionStorage.getItem("nuevo_cliente");
-    if (!data) return;
-
-    const cliente = JSON.parse(data);
-
-    // borrar para que no se repita
-    sessionStorage.removeItem("nuevo_cliente");
-
-    // buscar la fila del cliente recién creado
-    const fila = document.querySelector(`#fila-${cliente.id}`);
-
-    if (fila) {
-        fila.classList.add("bg-success", "text-white");
-
-        // quitar el color después de 3 segundos (igual que abonos)
-        setTimeout(() => {
-            fila.classList.remove("bg-success", "text-white");
-        }, 3000);
-    }
-
-    // opcional: hacer scroll automático
-    fila?.scrollIntoView({ behavior: "smooth", block: "center" });
-});
-</script>
-
 
    // ==================================================
   //  📘 HISTORIAL DE ABONOS (click en saldo)
