@@ -1046,7 +1046,7 @@ def historial_abonos_json(cliente_id):
     })
 
 # ======================================================
-# 💰 REGISTRAR ABONO POR CÓDIGO (versión estable, permite abonar cancelados)
+# 💰 REGISTRAR ABONO POR CÓDIGO (versión robusta usando saldo del cliente)
 # ======================================================
 @app_rutas.route("/registrar_abono_por_codigo", methods=["POST"])
 @login_required
@@ -1072,20 +1072,28 @@ def registrar_abono_por_codigo():
             flash(msg, "danger"), redirect(url_for("app_rutas.index"))
         )[1]
 
-    # 👇 YA NO BLOQUEAMOS POR CANCELADO
-    # antes aquí estaba el error
+    # 🧮 Usar el saldo del cliente como verdad absoluta
+    saldo_cliente = round(float(cliente.saldo or 0), 2)
 
-    # 🔎 Buscar préstamo activo
+    # ⛔ Si el cliente no debe nada, NO se puede abonar
+    if saldo_cliente <= 0:
+        msg = "Cliente sin préstamos pendientes."
+        return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
+            flash(msg, "warning"), redirect(url_for("app_rutas.index"))
+        )[1]
+
+    # 🔎 Tomar SIEMPRE el préstamo más reciente del cliente
     prestamo = (
         Prestamo.query.filter(
-            Prestamo.cliente_id == cliente.id,
-            Prestamo.saldo > 0
+            Prestamo.cliente_id == cliente.id
         )
         .order_by(Prestamo.fecha.desc(), Prestamo.id.desc())
         .first()
     )
+
     if not prestamo:
-        msg = "Cliente sin préstamos pendientes."
+        # Caso raro: cliente tiene saldo pero no hay préstamos
+        msg = "Cliente sin préstamos registrados."
         return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
             flash(msg, "warning"), redirect(url_for("app_rutas.index"))
         )[1]
@@ -1097,7 +1105,7 @@ def registrar_abono_por_codigo():
         dias_transcurridos = (local_date() - (prestamo.ultima_aplicacion_interes or prestamo.fecha)).days
         if dias_transcurridos >= 30:
             interes_extra = prestamo.monto * (prestamo.interes or 0) / 100
-            prestamo.saldo += interes_extra
+            prestamo.saldo = float(prestamo.saldo or 0) + float(interes_extra)
             prestamo.ultima_aplicacion_interes = local_date()
             interes_aplicado = True
 
@@ -1118,6 +1126,7 @@ def registrar_abono_por_codigo():
 
     # 🔄 Actualizar saldos
     prestamo.saldo = max(0.0, (prestamo.saldo or 0) - monto)
+
     cliente.saldo = (
         db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0))
         .filter(Prestamo.cliente_id == cliente.id)
