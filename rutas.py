@@ -33,12 +33,12 @@ from tiempo import (
 )
 import tiempo
 
-
 # ======================================================
 # 🧠 CACHÉ EN MEMORIA + RECÁLCULO EN SEGUNDO PLANO
 # ======================================================
-# caché memoria del día
+
 _cache_resumen = {"fecha": None, "data": None, "timestamp": 0}
+
 
 def recalcular_en_segundo_plano(app, fecha):
     """Recalcula liquidación y resumen en un hilo separado."""
@@ -49,31 +49,44 @@ def recalcular_en_segundo_plano(app, fecha):
             actualizar_liquidacion_por_movimiento,
         )
 
-        print("🧵 Iniciando recálculo en segundo plano...")
+        try:
+            print("🧵 Iniciando recálculo en segundo plano...")
 
-        # limpiar cache, recalcular liquidación y resumen total
-        eliminar_cache_resumen_hoy()
-        liq_hoy = actualizar_liquidacion_por_movimiento(fecha, commit=True)
-        resumen_total = obtener_resumen_total()
+            eliminar_cache_resumen_hoy()
+            liq_hoy = actualizar_liquidacion_por_movimiento(fecha, commit=True)
+            resumen_total = obtener_resumen_total()
 
-        global _cache_resumen
-        _cache_resumen["fecha"] = fecha
-        _cache_resumen["data"] = {
-            "clientes": None,  # los clientes se vuelven a leer en el index
-            "resumen_hoy": {
-                "entradas": liq_hoy.entradas,
-                "entradas_caja": liq_hoy.entradas_caja,
-                "prestamos_hoy": liq_hoy.prestamos_hoy,
-                "salidas": liq_hoy.salidas,
-                "gastos": liq_hoy.gastos,
-                "caja_manual": liq_hoy.caja_manual,
-                "caja": liq_hoy.caja,
-            },
-            "resumen_total": resumen_total,
-        }
-        _cache_resumen["timestamp"] = time.time()
+            global _cache_resumen
+            _cache_resumen["fecha"] = fecha
+            _cache_resumen["data"] = {
+                "clientes": None,
+                "resumen_hoy": {
+                    "entradas": liq_hoy.entradas,
+                    "entradas_caja": liq_hoy.entradas_caja,
+                    "prestamos_hoy": liq_hoy.prestamos_hoy,
+                    "salidas": liq_hoy.salidas,
+                    "gastos": liq_hoy.gastos,
+                    "caja_manual": liq_hoy.caja_manual,
+                    "caja": liq_hoy.caja,
+                },
+                "resumen_total": resumen_total,
+            }
+            _cache_resumen["timestamp"] = time.time()
 
-        print("✅ Recálculo en segundo plano terminado.")
+            print("✅ Recálculo en segundo plano terminado.")
+        except Exception as e:
+            current_app.logger.error(f"[BG RECALCULO] Error: {e}")
+
+
+def lanzar_recalculo_async(fecha):
+    """Lanza el recálculo en un hilo aparte, sin bloquear la petición."""
+    app = current_app._get_current_object()
+    hilo = Thread(
+        target=recalcular_en_segundo_plano,
+        args=(app, fecha),
+        daemon=True,
+    )
+    hilo.start()
 
 
 # ======================================================
@@ -176,35 +189,62 @@ def dashboard():
 
 
 # ======================================================
-# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (OPTIMIZADA)
+# 🏠 RUTA PRINCIPAL — CLIENTES + TARJETA DE RESUMEN (OPTIMIZADA + EN VIVO)
 # ======================================================
 @app_rutas.route("/")
 @login_required
 def index():
-    eliminar_cache_resumen_hoy()  # evita corrupción visual después de mover orden
+    # Evita problemas visuales con otros caches internos
+    eliminar_cache_resumen_hoy()
 
     hoy = local_date()
+    resaltado_id = request.args.get("resaltar", type=int)
 
-    # === USAR CACHE SI ES MISMO DÍA Y <30s ============================
+    # ================== 1) RESÚMENES (USANDO CACHÉ) ==================
+    resumen_hoy = None
+    resumen_total = None
+
     ahora = time.time()
+    # Solo cacheamos los RESÚMENES, no la lista de clientes
     if (
         _cache_resumen["fecha"] == hoy
         and _cache_resumen["data"] is not None
         and ahora - _cache_resumen["timestamp"] < 30
     ):
-        print("♻️ Cache index usado.")
+        print("♻️ Cache de resúmenes usado.")
         data = _cache_resumen["data"]
-        return render_template(
-            "index.html",
-            clientes=data["clientes"],
-            resumen_hoy=data["resumen_hoy"],
-            resumen_total=data["resumen_total"],
-            hoy=hoy,
-        )
+        resumen_hoy = data["resumen_hoy"]
+        resumen_total = data["resumen_total"]
+    else:
+        print("⚙️ Recalculando resúmenes del index...")
 
-    print("⚙️ Recalculando index...")
+        # Liquidación de hoy (sin commit para no recalcular todo el histórico)
+        liq_hoy = actualizar_liquidacion_por_movimiento(hoy, commit=False)
 
-    # 1) Cargar clientes + préstamos + abonos en lote
+        resumen_hoy = {
+            "entradas": liq_hoy.entradas,
+            "entradas_caja": liq_hoy.entradas_caja,
+            "prestamos_hoy": liq_hoy.prestamos_hoy,
+            "salidas": liq_hoy.salidas,
+            "gastos": liq_hoy.gastos,
+            "caja_manual": liq_hoy.caja_manual,
+            "caja": liq_hoy.caja,
+        }
+
+        # Resumen total
+        resumen_total = obtener_resumen_total()
+
+        # Guardar en caché SOLO los resúmenes
+        _cache_resumen["fecha"] = hoy
+        _cache_resumen["data"] = {
+            "clientes": None,  # ⚠️ No usamos esto ya, solo se mantiene por compatibilidad
+            "resumen_hoy": resumen_hoy,
+            "resumen_total": resumen_total,
+        }
+        _cache_resumen["timestamp"] = ahora
+
+    # ================== 2) CLIENTES (SIEMPRE DESDE BD) ==================
+    # 👉 Aquí está el cambio clave: NO usamos el caché para clientes.
     clientes = (
         Cliente.query.options(
             selectinload(Cliente.prestamos).selectinload(Prestamo.abonos)
@@ -214,7 +254,7 @@ def index():
         .all()
     )
 
-    # 2) Reparar orden roto
+    # 2.a) Reparar orden roto si hace falta
     orden_cambiado = False
     for idx, c in enumerate(clientes, start=1):
         if not c.orden or c.orden != idx:
@@ -223,7 +263,7 @@ def index():
     if orden_cambiado:
         db.session.commit()
 
-    # 3) Estado de plazo sin N+1 queries
+    # 2.b) Estado de plazo sin N+1
     subquery = (
         db.session.query(
             Prestamo.cliente_id,
@@ -258,37 +298,15 @@ def index():
                 estado = "moroso"
         c.estado_plazo = estado
 
-    # 4) Resumen del día (liquidación)
-    liq_hoy = actualizar_liquidacion_por_movimiento(hoy, commit=False)
-
-    resumen_hoy = {
-        "entradas": liq_hoy.entradas,
-        "entradas_caja": liq_hoy.entradas_caja,
-        "prestamos_hoy": liq_hoy.prestamos_hoy,
-        "salidas": liq_hoy.salidas,
-        "gastos": liq_hoy.gastos,
-        "caja_manual": liq_hoy.caja_manual,
-        "caja": liq_hoy.caja,
-    }
-
-    # 5) Resumen total
-    resumen_total = obtener_resumen_total()
-
-    # 6) Guardar en caché
-    _cache_resumen["fecha"] = hoy
-    _cache_resumen["data"] = {
-        "clientes": clientes,
-        "resumen_hoy": resumen_hoy,
-        "resumen_total": resumen_total,
-    }
-    _cache_resumen["timestamp"] = ahora
-
+    # ================== 3) RENDER ==================
     return render_template(
         "index.html",
         clientes=clientes,
         resumen_hoy=resumen_hoy,
         resumen_total=resumen_total,
         hoy=hoy,
+        hora_chile=hora_chile,
+        resaltado_id=resaltado_id,
     )
 
 
@@ -316,7 +334,7 @@ def logout():
 
 
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (FINAL con AJAX + hilo)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (AJAX + hilo)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
@@ -325,6 +343,7 @@ def nuevo_cliente():
         es_fetch = request.headers.get("X-Requested-With") == "fetch"
 
         try:
+            # 🔹 Leer datos del formulario
             nombre = (request.form.get("nombre") or "").strip()
             codigo = (request.form.get("codigo") or "").strip()
             direccion = (request.form.get("direccion") or "").strip()
@@ -332,7 +351,7 @@ def nuevo_cliente():
             monto = request.form.get("monto", type=float) or 0.0
             interes = request.form.get("interes", type=float) or 0.0
             plazo = request.form.get("plazo", type=int) or 0
-            orden = request.form.get("orden", type=int)  # 👈 puede venir None
+            orden = request.form.get("orden", type=int)  # puede venir None
             frecuencia = (request.form.get("frecuencia") or "diario").strip().lower()
 
             # 🔹 Frecuencia válida
@@ -340,7 +359,7 @@ def nuevo_cliente():
             if frecuencia not in FRECUENCIAS_VALIDAS:
                 frecuencia = "diario"
 
-            # 🔹 Código obligatorio (la clave del cliente)
+            # 🔹 Código obligatorio (clave del cliente)
             if not codigo:
                 msg = "Debe ingresar un código de cliente."
                 if es_fetch:
@@ -348,7 +367,7 @@ def nuevo_cliente():
                 flash(msg, "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
-            # 🔹 Si no viene orden o es inválido, lo calculamos al final de la lista
+            # 🔹 Calcular orden si no viene o viene inválido
             if not orden or orden <= 0:
                 max_orden = (
                     db.session.query(func.coalesce(func.max(Cliente.orden), 0))
@@ -359,17 +378,19 @@ def nuevo_cliente():
                 orden = max_orden + 1
 
             hoy = local_date()
-            cliente = Cliente.query.filter_by(codigo=codigo).first()
+
+            # Buscar cliente por código (puede estar activo o cancelado)
+            cliente_existente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ======================================================
             # 🔁 RENOVACIÓN (cliente cancelado)
             # ======================================================
-            if cliente and cliente.cancelado:
+            if cliente_existente and cliente_existente.cancelado:
                 nuevo = Cliente(
-                    nombre=cliente.nombre,
-                    codigo=cliente.codigo,
-                    direccion=direccion or cliente.direccion or "",
-                    telefono=telefono or cliente.telefono or "",
+                    nombre=nombre or cliente_existente.nombre or codigo,
+                    codigo=cliente_existente.codigo,
+                    direccion=direccion or cliente_existente.direccion or "",
+                    telefono=telefono or cliente_existente.telefono or "",
                     orden=orden,
                     fecha_creacion=hoy,
                     ultimo_abono_fecha=None,
@@ -377,16 +398,16 @@ def nuevo_cliente():
                     cancelado=False,
                 )
                 db.session.add(nuevo)
-                db.session.flush()
+                db.session.flush()  # para obtener nuevo.id
 
-                # reordenar
+                # 🧩 Reordenar clientes activos (shifteamos los que están detrás)
                 Cliente.query.filter(
                     Cliente.id != nuevo.id,
                     Cliente.cancelado == False,
                     Cliente.orden >= nuevo.orden,
                 ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
-                # préstamo
+                # 💰 Crear préstamo de renovación (si hay monto)
                 if monto > 0:
                     saldo_total = monto + (monto * (interes / 100.0))
                     prestamo = Prestamo(
@@ -409,14 +430,10 @@ def nuevo_cliente():
 
                 db.session.commit()
 
-                # 🧵 Recalcular pesado en segundo plano (app + fecha)
-                app = current_app._get_current_object()
-                Thread(
-                    target=recalcular_en_segundo_plano,
-                    args=(app, hoy),
-                    daemon=True,
-                ).start()
+                # 🧵 Recalcular en segundo plano (no bloquea la respuesta)
+                lanzar_recalculo_async(hoy)
 
+                # Respuesta AJAX
                 if es_fetch:
                     return jsonify(
                         {
@@ -429,17 +446,18 @@ def nuevo_cliente():
                                 "saldo": float(nuevo.saldo or 0),
                                 "ultimo_abono": 0.0,
                                 "cancelado": False,
-                            },
+                            }
                         }
                     ), 200
 
+                # Respuesta normal (navegador)
                 flash(f"Cliente {nuevo.nombre} renovado correctamente.", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
             # ======================================================
-            # ❌ Ya existe activo
+            # ❌ Ya existe un cliente ACTIVO con ese código
             # ======================================================
-            if cliente and not cliente.cancelado:
+            if cliente_existente and not cliente_existente.cancelado:
                 msg = "Ese código ya pertenece a un cliente activo."
                 if es_fetch:
                     return jsonify({"ok": False, "error": msg}), 400
@@ -447,7 +465,7 @@ def nuevo_cliente():
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ======================================================
-            # 🆕 NUEVO CLIENTE
+            # 🆕 NUEVO CLIENTE (código no existe o solo había cancelados viejos)
             # ======================================================
             nuevo = Cliente(
                 nombre=nombre or codigo,
@@ -456,20 +474,21 @@ def nuevo_cliente():
                 telefono=telefono or "",
                 orden=orden,
                 fecha_creacion=hoy,
+                saldo=0.0,
                 cancelado=False,
+                ultimo_abono_fecha=None,
             )
             db.session.add(nuevo)
             db.session.flush()
 
-            # reordenar
+            # 🧩 Reordenar clientes activos (mismo criterio que en renovación)
             Cliente.query.filter(
                 Cliente.id != nuevo.id,
                 Cliente.cancelado == False,
                 Cliente.orden >= nuevo.orden,
             ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
 
-            # préstamo inicial
-            saldo_total = 0.0
+            # 💰 Préstamo inicial (si hay monto)
             if monto > 0:
                 saldo_total = monto + (monto * (interes / 100.0))
                 prestamo = Prestamo(
@@ -492,14 +511,10 @@ def nuevo_cliente():
 
             db.session.commit()
 
-            # 🧵 Recalcular en segundo plano (app + fecha)
-            app = current_app._get_current_object()
-            Thread(
-                target=recalcular_en_segundo_plano,
-                args=(app, hoy),
-                daemon=True,
-            ).start()
+            # 🧵 Recalcular en segundo plano
+            lanzar_recalculo_async(hoy)
 
+            # Respuesta AJAX
             if es_fetch:
                 return jsonify(
                     {
@@ -516,6 +531,7 @@ def nuevo_cliente():
                     }
                 ), 200
 
+            # Respuesta normal
             flash(f"Cliente {nuevo.nombre} creado correctamente.", "success")
             return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
@@ -524,16 +540,19 @@ def nuevo_cliente():
             print(f"[ERROR nuevo_cliente] {e}")
             if es_fetch:
                 return jsonify({"ok": False, "error": "Error inesperado."}), 500
-            flash("Ocurrió un error inesperado.", "danger")
+            flash("Ocurrió un error inesperado al crear o renovar el cliente.", "danger")
             return redirect(url_for("app_rutas.nuevo_cliente"))
 
-    # GET
+    # ======================================================
+    # GET — Mostrar formulario
+    # ======================================================
     try:
         codigo_sugerido = generar_codigo_cliente()
     except Exception:
         codigo_sugerido = "000000"
 
     return render_template("nuevo_cliente.html", codigo_sugerido=codigo_sugerido)
+
 
 # ======================================================
 # 📋 CLIENTES CANCELADOS — VERSIÓN FINAL (detecta renovados por código activo)
@@ -1078,7 +1097,7 @@ def historial_abonos_json(cliente_id):
     })
 
 # ======================================================
-# 💰 REGISTRAR ABONO POR CÓDIGO (versión robusta usando saldo del cliente)
+# 💰 REGISTRAR ABONO POR CÓDIGO (versión coherente con tu lógica)
 # ======================================================
 @app_rutas.route("/registrar_abono_por_codigo", methods=["POST"])
 @login_required
@@ -1096,20 +1115,26 @@ def registrar_abono_por_codigo():
             flash(msg, "danger"), redirect(url_for("app_rutas.index"))
         )[1]
 
-    # 🔍 Buscar cliente
-    cliente = Cliente.query.filter_by(codigo=codigo).first()
+    # 🔍 Buscar SOLO clientes activos (no cancelados)
+    cliente = Cliente.query.filter_by(codigo=codigo, cancelado=False).first()
+
     if not cliente:
-        msg = f"Código {codigo} no encontrado."
+        # 👇 Aquí asumimos: o no existe, o ya está en cancelados
+        msg = f"El cliente con código {codigo} no existe o ya está cancelado."
         return (jsonify({"ok": False, "error": msg}), 404) if es_fetch else (
-            flash(msg, "danger"), redirect(url_for("app_rutas.index"))
+            flash(msg, "warning"), redirect(url_for("app_rutas.index"))
         )[1]
 
     # 🧮 Usar el saldo del cliente como verdad absoluta
     saldo_cliente = round(float(cliente.saldo or 0), 2)
 
-    # ⛔ Si el cliente no debe nada, NO se puede abonar
+    # ⛔ Si por alguna inconsistencia el saldo está en 0 o menos, lo mandamos a cancelados
     if saldo_cliente <= 0:
-        msg = "Cliente sin préstamos pendientes."
+        cliente.saldo = 0.0
+        cliente.cancelado = True
+        db.session.commit()
+
+        msg = "Cliente sin préstamos pendientes (saldo 0, movido a cancelados)."
         return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
             flash(msg, "warning"), redirect(url_for("app_rutas.index"))
         )[1]
@@ -1124,7 +1149,7 @@ def registrar_abono_por_codigo():
     )
 
     if not prestamo:
-        # Caso raro: cliente tiene saldo pero no hay préstamos
+        # Caso raro: cliente activo con saldo pero sin prestamos (inconsistencia)
         msg = "Cliente sin préstamos registrados."
         return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
             flash(msg, "warning"), redirect(url_for("app_rutas.index"))
@@ -1170,15 +1195,11 @@ def registrar_abono_por_codigo():
     cancelado = False
     saldo_redondeado = round(cliente.saldo, 2)
 
-    # si queda en 0 ⇒ cancelar
+    # si queda en 0 ⇒ cancelar (y AHÍ sí pasa a cancelados)
     if saldo_redondeado <= 0:
         cliente.saldo = 0.0
         cliente.cancelado = True
         cancelado = True
-    else:
-        # si estaba cancelado y vuelve a tener saldo ⇒ reactivar
-        if cliente.cancelado:
-            cliente.cancelado = False
 
     db.session.commit()
     actualizar_liquidacion_por_movimiento(local_date())
@@ -1248,7 +1269,6 @@ def ganancias_mes_view():
         fecha_fin=fin
     )
 
-
 # ======================================================
 # 🗑️ ELIMINAR ABONO (reactiva y recalcula caja histórica)
 # ======================================================
@@ -1261,18 +1281,19 @@ def eliminar_abono(abono_id):
         prestamo = abono.prestamo
         cliente = prestamo.cliente
 
-        # 🗓️ Guardar la fecha original del abono (zona Chile ya normalizada en tu modelo)
+        # 🗓️ Guardar la fecha original del abono
         fecha_abono_dt = abono.fecha
         fecha_abono = fecha_abono_dt.date() if hasattr(fecha_abono_dt, "date") else local_date()
 
         # 🔁 Devolver el monto al saldo del préstamo
         prestamo.saldo = float(prestamo.saldo or 0) + float(abono.monto or 0)
 
-        # 🗑️ Borrar el abono y recalcular saldo del cliente
+        # 🗑️ Borrar el abono
         monto_borrado = float(abono.monto or 0)
         db.session.delete(abono)
         db.session.flush()
 
+        # 💰 Recalcular saldo del cliente desde TODOS los préstamos
         total_saldo_cliente = (
             db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0))
             .filter(Prestamo.cliente_id == cliente.id)
@@ -1281,17 +1302,25 @@ def eliminar_abono(abono_id):
         )
         cliente.saldo = float(total_saldo_cliente)
 
-        # 🔄 Si estaba cancelado y ahora vuelve a deber → reactivar
+        # 🔄 Sincronizar saldo/cancelado SIEMPRE
         reactivado = False
-        if cliente.cancelado and round(cliente.saldo, 2) > 0:
+        saldo_redondeado = round(cliente.saldo or 0.0, 2)
+
+        if saldo_redondeado <= 0:
+            # si después de eliminar el abono igual/no vuelve a deber ⇒ sigue/cambia a cancelado
+            cliente.saldo = 0.0
+            cliente.cancelado = True
+        else:
+            # tiene saldo > 0 ⇒ debe estar ACTIVO
+            if cliente.cancelado:
+                reactivado = True  # solo lo marcamos para el mensaje
             cliente.cancelado = False
-            # Usamos fecha local (solo fecha) para "volver a estar activo hoy"
+            # lo consideramos "movido" hoy porque tocaste su deuda
             cliente.ultimo_abono_fecha = local_date()
-            reactivado = True
 
         db.session.commit()
 
-        # 📅 Recalcular liquidaciones desde la fecha del abono hasta hoy (propaga el cambio)
+        # 📅 Recalcular liquidaciones desde la fecha del abono hasta hoy
         def _recalc_desde(fecha_inicio):
             d = fecha_inicio
             hoy = local_date()
