@@ -97,8 +97,8 @@ app_rutas = Blueprint("app_rutas", __name__)
 # ======================================================
 # 🔐 LOGIN / AUTENTICACIÓN
 # ======================================================
-VALID_USER = os.getenv("APP_USER", "j-mejia")
-VALID_PASS = os.getenv("APP_PASS", "honny")
+VALID_USER = os.getenv("APP_USER", "mjesus40")
+VALID_PASS = os.getenv("APP_PASS", "198409")
 
 
 def login_required(f):
@@ -775,6 +775,53 @@ def reactivar_cliente(cliente_id):
 
     flash(f"🟢 Cliente {nuevo_cliente.nombre} renovado correctamente.", "success")
     return redirect(url_for("app_rutas.index"))
+
+# ======================================================
+# 🗑️ ELIMINAR CLIENTE DEFINITIVO (solo desde CANCELADOS)
+# ======================================================
+@app_rutas.route("/eliminar_cliente_def/<int:cliente_id>", methods=["POST"])
+@login_required
+def eliminar_cliente_def(cliente_id):
+    try:
+        cliente = Cliente.query.get_or_404(cliente_id)
+
+        # Solo permitir si ya está cancelado
+        if not cliente.cancelado:
+            msg = "Solo se pueden eliminar definitivamente clientes que estén en cancelados."
+            if request.headers.get("X-Requested-With") == "fetch":
+                return jsonify({"ok": False, "error": msg}), 400
+            flash(msg, "danger")
+            return redirect(url_for("app_rutas.clientes_cancelados_view"))
+
+        # (Opcional) Seguridad extra: no permitir si por alguna razón tiene saldo
+        if (cliente.saldo or 0) > 0:
+            msg = f"El cliente {cliente.nombre} aún tiene saldo pendiente. No se puede eliminar definitivo."
+            if request.headers.get("X-Requested-With") == "fetch":
+                return jsonify({"ok": False, "error": msg}), 400
+            flash(msg, "warning")
+            return redirect(url_for("app_rutas.clientes_cancelados_view"))
+
+        nombre = cliente.nombre
+
+        db.session.delete(cliente)
+        db.session.commit()
+
+        msg_ok = f"🧨 Cliente {nombre} eliminado DEFINITIVAMENTE."
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": True, "mensaje": msg_ok, "cliente_id": cliente.id}), 200
+
+        flash(msg_ok, "success")
+        return redirect(url_for("app_rutas.clientes_cancelados_view"))
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR eliminar_cliente_def] {e}")
+        msg_err = "❌ Ocurrió un error al eliminar definitivamente al cliente."
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": msg_err}), 500
+        flash(msg_err, "danger")
+        return redirect(url_for("app_rutas.clientes_cancelados_view"))
+
 
 # ======================================================
 # ✏️ ACTUALIZAR ORDEN DE CLIENTE — con desplazamiento automático

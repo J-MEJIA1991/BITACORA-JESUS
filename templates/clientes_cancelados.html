@@ -24,6 +24,7 @@
           <th>Salida</th>
           <th>Último abono</th>
           <th>Saldo / Historial</th>
+          <th>Acciones</th>  {# 👈 NUEVA COLUMNA #}
         </tr>
       </thead>
       <tbody id="tabla-cancelados">
@@ -54,6 +55,16 @@
                   style="cursor: pointer; text-decoration: underline;">
               ${{ "%.2f"|format(c.saldo or 0.0) }} — Ver historial
             </span>
+          </td>
+          <td>
+            <form method="POST"
+                  action="{{ url_for('app_rutas.eliminar_cliente_def', cliente_id=c.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('⚠️ Esto eliminará DEFINITIVAMENTE al cliente y todos sus datos. ¿Seguro que deseas continuar?');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                🗑 Eliminar definitivo
+              </button>
+            </form>
           </td>
         </tr>
         {% endfor %}
