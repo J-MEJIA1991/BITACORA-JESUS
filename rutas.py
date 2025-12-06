@@ -97,8 +97,8 @@ app_rutas = Blueprint("app_rutas", __name__)
 # ======================================================
 # 🔐 LOGIN / AUTENTICACIÓN
 # ======================================================
-VALID_USER = os.getenv("APP_USER", "mjesus40")
-VALID_PASS = os.getenv("APP_PASS", "198409")
+VALID_USER = os.getenv("APP_USER", "j-mejia")
+VALID_PASS = os.getenv("APP_PASS", "honny")
 
 
 def login_required(f):
