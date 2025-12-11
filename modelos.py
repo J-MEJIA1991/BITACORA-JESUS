@@ -2,8 +2,10 @@
 # modelos.py — versión FINAL (Créditos System, hora Chile 🇨🇱)
 # ======================================================
 
+from datetime import date
 from extensions import db
 from tiempo import hora_actual, local_date  # ✅ Hora y fecha local chilena
+
 
 # ---------------------------------------------------
 # 🧍‍♂️ CLIENTE
@@ -121,7 +123,60 @@ class Cliente(db.Model):
         ultimo_abono = max(u.abonos, key=lambda a: a.fecha or date.min)
         return float(ultimo_abono.monto or 0.0)
 
+    # ---------------------------------------------------
+    # 🎨 CLASES CSS PARA LA FILA (COLORES EN EL INDEX)
+    # ---------------------------------------------------
+    def clases_estado(self, hoy=None):
+        """
+        Devuelve un string con las clases CSS que debe tener la fila del cliente,
+        similar a estado_class(p) en Finanzas Aitana.
+        Ejemplo: "plazo-vencido interes-vencido"
+        """
+        if hoy is None:
+            hoy = local_date()
 
+        clases = []
+
+        # 1) Si está cancelado, manda primero
+        if self.cancelado:
+            clases.append("cancelado")
+            # Si quisieras que un cancelado ignore otros estados, podrías:
+            # return " ".join(clases)
+
+        # 2) Colores según cuotas atrasadas (tu lógica de negocio)
+        atrasadas = 0
+        try:
+            atrasadas = self.cuotas_atrasadas() or 0
+        except Exception:
+            atrasadas = 0
+
+        if atrasadas >= 30:
+            clases.append("plazo-moroso")   # 🔴 rojo fuerte
+        elif atrasadas >= 1:
+            clases.append("plazo-vencido")  # 🟠 amarillo
+
+        # 3) Interés mensual vencido en préstamos MENSUALES con 30+ días
+        ultimo_prestamo = None
+        if self.prestamos:
+            ultimo_prestamo = max(self.prestamos, key=lambda p: p.fecha or date.min)
+
+        if ultimo_prestamo and not self.cancelado:
+            freq = (ultimo_prestamo.frecuencia or "diario").lower()
+            if freq == "mensual" and ultimo_prestamo.fecha:
+                f = ultimo_prestamo.fecha
+                # por si es datetime
+                if hasattr(f, "date"):
+                    f = f.date()
+                dias_desde = (hoy - f).days
+                if dias_desde >= 30:
+                    clases.append("interes-vencido")
+
+        return " ".join(clases)
+
+
+# ---------------------------------------------------
+# 💳 PRÉSTAMO
+# ---------------------------------------------------
 class Prestamo(db.Model):
     __tablename__ = "prestamo"
 
@@ -143,6 +198,7 @@ class Prestamo(db.Model):
         cascade="all, delete-orphan",
         lazy="selectin"   # 👈 antes era lazy=True
     )
+
 
 # ---------------------------------------------------
 # 💰 ABONO

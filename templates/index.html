@@ -41,101 +41,109 @@
       <th>Último Abono</th>
       <th>Abonar</th>
       <th>Saldo</th>
-      <th>Eliminar</th>  <!-- 👈 solo esta -->
+      <th>Eliminar</th>
     </tr>
   </thead>
+
   <tbody>
-    {% for c in clientes %}
-      {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
-      {% set dias_desde = (hoy - u.fecha).days if u and u.fecha else 0 %}
+  {% for c in clientes %}
+    {# 🧮 Último préstamo del cliente (si tiene) #}
+    {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
 
-      <tr id="cliente-row-{{ c.id }}"
-          class="fila-cliente
-            {% if u and (u.frecuencia or 'diario') == 'mensual' and dias_desde >= 30 and not c.cancelado %}interes-vencido{% endif %}
-            {% if c.cancelado %}cancelado{% elif c.estado_plazo == 'vencido' %}plazo-vencido{% elif c.estado_plazo == 'moroso' %}plazo-moroso{% endif %}
-          ">
+    <tr id="cliente-row-{{ c.id }}"
+    class="fila-cliente
+      {% if c.cancelado %}
+        cancelado
+      {% elif c.estado_plazo and c.estado_plazo|lower == 'vencido' %}
+        plazo-vencido
+      {% elif c.estado_plazo and c.estado_plazo|lower == 'moroso' %}
+        plazo-moroso
+      {% endif %}
+    ">
 
-        <!-- ORDEN -->
-<td style="width:100px;">
-  <input type="number"
-         class="form-control text-center orden-input"
-         value="{{ c.orden }}"
-         data-id="{{ c.id }}"
-         style="width:70px;"
-         {% if c.cancelado %}disabled{% endif %}>
-</td>
+      <!-- ORDEN -->
+      <td style="width:100px;">
+        <input type="number"
+               class="form-control text-center orden-input"
+               value="{{ c.orden }}"
+               data-id="{{ c.id }}"
+               style="width:70px;"
+               {% if c.cancelado %}disabled{% endif %}>
+      </td>
 
-        <!-- DATOS PRINCIPALES -->
-        <td>{{ c.codigo }}</td>
-        <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
-        <td class="nombre-cliente">{{ c.nombre }}</td>
+      <!-- DATOS PRINCIPALES -->
+      <td>{{ c.codigo }}</td>
+      <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+      <td class="nombre-cliente">{{ c.nombre }}</td>
 
-        <!-- MONTO PRESTADO -->
-        <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
+      <!-- MONTO PRESTADO (sin interés) -->
+      <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
 
-        <!-- CUOTA -->
-        <td>
-          {{ "%.2f"|format(c.valor_cuota()) }}
-          {% if c.prestamos %}
-            {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
-            {% if u.frecuencia %}
-              <small class="text-muted">({{ u.frecuencia }})</small>
-            {% endif %}
+      <!-- CUOTA -->
+      <td>
+        {{ "%.2f"|format(c.valor_cuota()) }}
+        {% if c.prestamos %}
+          {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
+          {% if u.frecuencia %}
+            <small class="text-muted">({{ u.frecuencia }})</small>
           {% endif %}
-        </td>
+        {% endif %}
+      </td>
 
-        <!-- CUOTAS ATRASADAS -->
-        <td>{{ c.cuotas_atrasadas() }}</td>
+      <!-- CUOTAS ATRASADAS -->
+      <td>{{ c.cuotas_atrasadas() }}</td>
 
-        <!-- ÚLTIMO ABONO -->
-        <td id="ultimo-abono-{{ c.id }}">
-          {{ "%.2f"|format(c.ultimo_abono_monto()) }}
-        </td>
+      <!-- ÚLTIMO ABONO -->
+      <td id="ultimo-abono-{{ c.id }}">
+        {{ "%.2f"|format(c.ultimo_abono_monto()) }}
+      </td>
 
-        <!-- ABONAR -->
+      <!-- ABONAR -->
       <td class="abono-td">
-      <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
-        method="post"
-        class="d-flex justify-content-center form-abono"
-        data-orden="{{ c.orden }}">
-    <input type="hidden" name="codigo" value="{{ c.codigo }}">
-    <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
-           class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
-           style="width:120px; height:50px; font-size:1.4rem;"
-           required autocomplete="off">
-    <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
-  </form>
+        <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
+              method="post"
+              class="d-flex justify-content-center form-abono"
+              data-orden="{{ c.orden }}">
+          <input type="hidden" name="codigo" value="{{ c.codigo }}">
+          <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
+                 class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
+                 style="width:120px; height:50px; font-size:1.4rem;"
+                 required autocomplete="off">
+          <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
+        </form>
 
-  {% if c.cancelado %}
-    <small class="text-danger fw-bold d-block mt-1">Cancelado</small>
-  {% endif %}
-</td>
+        {% if c.cancelado %}
+          <small class="text-danger fw-bold d-block mt-1">Cancelado</small>
+        {% endif %}
+      </td>
 
-        <!-- SALDO -->
-        <td>
-          {% if c.cancelado %}
-            <span class="text-muted saldo-texto" data-cliente-id="{{ c.id }}">0.00</span>
-          {% else %}
-            <button class="btn btn-link p-0 saldo-clickable saldo-texto" data-cliente-id="{{ c.id }}">
-              {{ "%.2f"|format(c.saldo_total()) }}
-            </button>
-          {% endif %}
-        </td>
+      <!-- SALDO -->
+      <td>
+        {% if c.cancelado %}
+          <span class="text-muted saldo-texto" data-cliente-id="{{ c.id }}">0.00</span>
+        {% else %}
+          <button class="btn btn-link p-0 saldo-clickable saldo-texto" data-cliente-id="{{ c.id }}">
+            {{ "%.2f"|format(c.saldo_total()) }}
+          </button>
+        {% endif %}
+      </td>
 
-        <!-- 🗑️ ELIMINAR CLIENTE -->
-<td>
-  <button class="btn btn-danger btn-sm eliminar-cliente-btn"
-          data-id="{{ c.id }}"
-          data-nombre="{{ c.nombre }}">
-    🗑️ Eliminar
-  </button>
-</td>
-      </tr>
-    {% endfor %}
+      <!-- 🗑️ ELIMINAR CLIENTE -->
+      <td>
+        <button class="btn btn-danger btn-sm eliminar-cliente-btn"
+                data-id="{{ c.id }}"
+                data-nombre="{{ c.nombre }}">
+          🗑️ Eliminar
+        </button>
+      </td>
+    </tr>
+  {% endfor %}
   </tbody>
 </table>
 {% else %}
-  <div class="alert alert-info text-center">No hay clientes registrados aún.</div>
+  <div class="alert alert-info text-center mt-4">
+    No hay clientes registrados aún.
+  </div>
 {% endif %}
 
 <!-- =================== MODAL EDITAR PRÉSTAMO =================== -->
@@ -175,7 +183,7 @@
   </div>
 </div>
 
-<!-- =================== MODAL HISTORIAL =================== -->
+<!-- =================== MODAL HISTORIAL (SALDO CLICK) =================== -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
@@ -192,19 +200,28 @@
               <th>Cuota</th><th>Modo</th><th>Datos</th><th>Saldo</th>
             </tr>
           </thead>
-          <tbody id="tablaDatosPrestamo"><tr><td colspan="8"><em>Cargando...</em></td></tr></tbody>
+          <tbody id="tablaDatosPrestamo">
+            <tr><td colspan="8"><em>Cargando...</em></td></tr>
+          </tbody>
         </table>
+
         <h6 class="fw-bold mt-4 mb-3">Historial de Abonos</h6>
         <table class="table table-sm table-bordered text-center align-middle">
-          <thead class="table-light"><tr><th>Código</th><th>Fecha</th><th>Hora</th><th>Abono</th><th>Saldo</th><th>Acción</th></tr></thead>
-          <tbody id="tablaHistorialBody"><tr><td colspan="6"><em>Cargando...</em></td></tr></tbody>
+          <thead class="table-light">
+            <tr>
+              <th>Código</th><th>Fecha</th><th>Hora</th><th>Abono</th><th>Saldo</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tablaHistorialBody">
+            <tr><td colspan="6"><em>Cargando...</em></td></tr>
+          </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
 
-<!-- =================== SCRIPTS =================== -->
+<!-- =================== SCRIPTS PRINCIPALES =================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   // ==================================================
@@ -226,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ==================================================
-  //  ✏️ EDITAR PRÉSTAMO (protegido por si no existe modal)
+  //  ✏️ EDITAR PRÉSTAMO (protegido)
   // ==================================================
   const modalEditarEl = document.getElementById("modalEditarPrestamo");
   const formEditar = document.getElementById("formEditarPrestamo");
@@ -283,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const res = await fetch(form.action, {
           method: "POST",
           body: formData,
-          headers: { "X-Requested-With": "fetch" } // 👈 importante
+          headers: { "X-Requested-With": "fetch" }
         });
         const data = await res.json();
 
@@ -333,9 +350,8 @@ document.addEventListener("DOMContentLoaded", () => {
           setTimeout(() => saldoElem.style.backgroundColor = "", 800);
         }
 
-        // 🟡 ACTUALIZAR "ÚLTIMO ABONO" MOSTRANDO **EL MONTO**
+        // 🟡 ACTUALIZAR "ÚLTIMO ABONO" MOSTRANDO EL MONTO
         const celdaUltimo = document.getElementById(`ultimo-abono-${data.cliente_id}`);
-        console.log("👉 Monto recibido para último abono:", data.monto);
         if (celdaUltimo && typeof data.monto !== "undefined") {
           celdaUltimo.textContent = Number(data.monto).toFixed(2);
         }
@@ -358,11 +374,14 @@ document.addEventListener("DOMContentLoaded", () => {
           setTimeout(() => toast.remove(), 4000);
         }
 
-        // ✨ limpiar input y DEJARLO verde (abonó hoy)
+        // ✨ limpiar input y dejarlo verde un rato
         if (input) {
-                         input.value = "";
-                        input.classList.add("bg-success", "text-white");
-                 }
+          input.value = "";
+          input.classList.add("bg-success", "text-white");
+          setTimeout(() => {
+            input.classList.remove("bg-success", "text-white");
+          }, 5000);
+        }
 
       } catch (err) {
         playSound(false);
@@ -372,8 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-
-   // ==================================================
+  // ==================================================
   //  📘 HISTORIAL DE ABONOS (click en saldo)
   // ==================================================
   const modalHistorialEl = document.getElementById("modalHistorial");
@@ -384,8 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.querySelectorAll(".saldo-clickable").forEach(btn => {
     btn.addEventListener("click", async () => {
-
-      const id = btn.getAttribute("data-cliente-id");   // ← 💚 MÉTODO SEGURO
+      const id = btn.getAttribute("data-cliente-id");
 
       if (!id) {
         alert("No se pudo obtener el ID del cliente.");
@@ -424,7 +441,6 @@ document.addEventListener("DOMContentLoaded", () => {
             <td>$${p.saldo.toFixed(2)}</td>
           </tr>`;
 
-        // 👇 AQUÍ VIENE LA PARTE QUE ESTABA ROMPIENDO
         tbody.innerHTML = data.abonos.length
           ? data.abonos.map(a => {
               const btnEliminar = a.id > 0
@@ -453,9 +469,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-
   // ==================================================
-  //  🗑️ ELIMINAR ABONO
+  //  🗑️ ELIMINAR ABONO (desde el modal)
   // ==================================================
   document.addEventListener("click", async (e) => {
     if (!e.target.classList.contains("eliminar-abono")) return;
@@ -494,9 +509,9 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Error de conexión al eliminar abono.");
     }
   });
+
 });
 </script>
-
 
 <!-- =================== BUSCADOR EN TIEMPO REAL =================== -->
 <script>
@@ -526,41 +541,38 @@ document.addEventListener("DOMContentLoaded", () => {
 <!-- =================== ESTILOS =================== -->
 <style>
 /* 🚫 Cliente cancelado */
-.cancelado {
-  background-color: #f8d7da;
-  color: #721c24;
+.cancelado > td,
+.cancelado > th {
+  background-color: #f8d7da !important;
+  color: #721c24 !important;
 }
 
-/* 🟠 Plazo vencido (en advertencia) */
-.plazo-vencido {
-  background-color: rgba(255,165,0,0.15) !important;
+/* 🟠 Cliente vencido */
+.plazo-vencido > td,
+.plazo-vencido > th {
+  background-color: rgba(255, 193, 7, 0.22) !important;
 }
 
-/* 🔴 Plazo moroso (grave) */
-.plazo-moroso {
-  background-color: rgba(255,0,0,0.15) !important;
+/* 🔴 Cliente moroso */
+.plazo-moroso > td,
+.plazo-moroso > th {
+  background-color: rgba(220, 53, 69, 0.22) !important;
 }
 
-/* 🔴 Interés mensual vencido */
-.interes-vencido {
-  background-color: rgba(255, 0, 0, 0.1) !important; /* fondo rojo suave */
-  border-left: 4px solid #ff4d4d; /* borde rojo lateral */
-  animation: parpadeoInteres 1.2s ease-in-out infinite alternate;
+/* ❤️ Interés mensual vencido */
+.interes-vencido > td,
+.interes-vencido > th {
+  background-color: rgba(220, 53, 69, 0.28) !important;
 }
 
-@keyframes parpadeoInteres {
-  from { background-color: rgba(255, 0, 0, 0.1); }
-  to { background-color: rgba(255, 0, 0, 0.25); }
-}
-
-/* 💰 Celda de abono */
+/* 💰 Celda de abono (input) */
 .abono-td form {
   align-items: center;
   justify-content: center;
   gap: 0.3em;
 }
 
-/* 💵 Saldo clickeable (abre historial) */
+/* 💵 Saldo clickeable */
 .saldo-clickable {
   font-size: 1em;
   font-weight: bold;
@@ -569,268 +581,13 @@ document.addEventListener("DOMContentLoaded", () => {
   cursor: pointer;
 }
 
-/* ✅ Animación verde al registrar abono */
-.fila-parpadea {
-  animation: parpadeoVerde 1s ease-out;
+/* 🔔 Animación ligera (cuando reactivas cliente) */
+.resaltado-reactivado {
+  background-color: rgba(40, 167, 69, 0.4) !important;
+  transition: background-color 1.5s ease-out;
 }
-
-@keyframes parpadeoVerde {
-  0% { background-color: #d4edda; }
-  50% { background-color: #b6e0c3; }
-  100% { background-color: transparent; }
+.resaltado-reactivado.fade-out {
+  background-color: transparent !important;
 }
 </style>
-
-{% if resaltado_id %}
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const fila = document.querySelector(`#cliente-row-{{ resaltado_id }}`);
-  if (fila) {
-    fila.scrollIntoView({ behavior: "smooth", block: "center" });
-    setTimeout(() => {
-      const inputAbono = fila.querySelector("input[name='monto']");
-      if (inputAbono) {
-        inputAbono.focus();
-        inputAbono.style.transition = "box-shadow 0.6s ease";
-        inputAbono.style.boxShadow = "0 0 10px rgba(0,123,255,0.6)";
-        setTimeout(() => inputAbono.style.boxShadow = "", 1000);
-      }
-    }, 500);
-  }
-});
-</script>
-{% endif %}
-
-<!-- =================== ELIMINAR CLIENTE SIN RECARGAR =================== -->
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".eliminar-cliente-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.dataset.id;
-      const nombre = btn.dataset.nombre;
-
-      if (!confirm(`¿Seguro que deseas eliminar a ${nombre}? Esta acción no se puede deshacer.`))
-        return;
-
-      try {
-        const res = await fetch(`/eliminar_cliente/${id}`, {
-          method: "POST",
-          headers: { "X-Requested-With": "fetch" }
-        });
-        const data = await res.json();
-
-        if (!data.ok) {
-          alert("❌ " + (data.error || "No se pudo eliminar el cliente."));
-          return;
-        }
-
-        // 💨 Desvanecer fila eliminada
-        const fila = document.getElementById(`cliente-row-${id}`);
-        if (fila) {
-          fila.style.transition = "opacity 0.5s ease, transform 0.5s ease";
-          fila.style.opacity = "0";
-          fila.style.transform = "translateX(-20px)";
-          setTimeout(() => fila.remove(), 500);
-        }
-
-        // ✅ Mensaje visual
-        const toast = document.createElement("div");
-        toast.className = "alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3 shadow";
-        toast.style.zIndex = 2000;
-        toast.textContent = `🗑️ Cliente ${nombre} eliminado correctamente.`;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-
-      } catch (err) {
-        alert("❌ Error al eliminar el cliente.");
-        console.error(err);
-      }
-    });
-  });
-});
-</script>
-
-<style>
-/* 🔧 Estilos drag & drop */
-.drag-handle {
-  cursor: grab;
-  user-select: none;
-  font-size: 1.1rem;
-}
-tr.dragging {
-  opacity: 0.6;
-}
-tr.drop-target {
-  outline: 2px dashed #0d6efd;
-}
-</style>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const tbody = document.querySelector("#tabla-clientes tbody");
-  if (!tbody) return;
-
-  // ========= UTILIDADES =========
-  const filaPorEvento = (e) => e.target.closest("tr.fila-cliente");
-  const getOrdenInput = (tr) => tr.querySelector(".orden-input");
-  const getClienteId = (tr) => tr.id.replace("cliente-row-", "");
-  const filas = () => Array.from(tbody.querySelectorAll("tr.fila-cliente"));
-  const esCancelado = (tr) => tr.classList.contains("cancelado");
-
-  // Re-numera visualmente los inputs de orden (1..n)
-  function renumerarVisual() {
-    filas().forEach((tr, i) => {
-      const inp = getOrdenInput(tr);
-      if (inp) inp.value = i + 1;
-    });
-  }
-
-  // Mueve en el DOM la fila desde un índice a otro (optimista)
-  function moverFilaDom(idxFrom, idxTo) {
-    const arr = filas();
-    const row = arr[idxFrom];
-    const ref = arr[idxTo];
-    if (!row || !ref || row === ref) return;
-    if (idxTo > idxFrom) {
-      // insertar después
-      ref.after(row);
-    } else {
-      // insertar antes
-      ref.before(row);
-    }
-    renumerarVisual();
-  }
-
-  // ========= DRAG & DROP =========
-  let draggingRow = null;
-
-  // Añade manija y atributos a cada fila (excepto cancelados)
-  filas().forEach(tr => {
-    if (esCancelado(tr)) return;
-    tr.setAttribute("draggable", "true");
-    // Si no tiene manija, la creamos en la celda de orden
-    const ordenTd = tr.querySelector("td:first-child");
-    if (ordenTd && !ordenTd.querySelector(".drag-handle")) {
-      const handle = document.createElement("span");
-      handle.className = "drag-handle ms-1";
-      handle.title = "Arrastra para reordenar";
-      handle.textContent = "⋮⋮";
-      ordenTd.prepend(handle);
-    }
-  });
-
-  tbody.addEventListener("dragstart", (e) => {
-    const tr = filaPorEvento(e);
-    if (!tr || esCancelado(tr)) return;
-    draggingRow = tr;
-    tr.classList.add("dragging");
-    // mejora UX: imagen transparente
-    const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
-    e.dataTransfer.setDragImage(img, 0, 0);
-  });
-
-  tbody.addEventListener("dragover", (e) => {
-    if (!draggingRow) return;
-    e.preventDefault();
-    const over = filaPorEvento(e);
-    filas().forEach(r => r.classList.remove("drop-target"));
-    if (over && over !== draggingRow) over.classList.add("drop-target");
-  });
-
-  tbody.addEventListener("dragleave", (e) => {
-    const tr = filaPorEvento(e);
-    if (tr) tr.classList.remove("drop-target");
-  });
-
-  tbody.addEventListener("drop", async (e) => {
-    e.preventDefault();
-    const target = filaPorEvento(e);
-    filas().forEach(r => r.classList.remove("drop-target"));
-    if (!draggingRow || !target || draggingRow === target) {
-      if (draggingRow) draggingRow.classList.remove("dragging");
-      draggingRow = null;
-      return;
-    }
-
-    // Índices actuales
-    const arr = filas();
-    const fromIdx = arr.indexOf(draggingRow);
-    const toIdx = arr.indexOf(target);
-
-    // Optimista: mover en DOM y renumerar inputs
-    moverFilaDom(fromIdx, toIdx);
-
-    // Enviar al backend: nueva posición (1-based)
-    const id = getClienteId(draggingRow);
-    const nuevaPos = arr.indexOf(target) === -1
-      ? toIdx + 1
-      : filas().indexOf(draggingRow) + 1; // tras mover, recalcula
-
-    try {
-      const res = await fetch(`/actualizar_orden/${id}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: `orden=${nuevaPos}`
-      });
-      const txt = await res.text();
-
-      if (txt !== "OK") {
-        // Revertir (si el backend no aceptó)
-        // Simplemente recargamos para recuperar estado real
-        alert("❌ No se pudo guardar el nuevo orden. Se recargará la página.");
-        location.reload();
-      }
-    } catch (err) {
-      alert("❌ Error de conexión guardando el nuevo orden. Se recargará la página.");
-      location.reload();
-    } finally {
-      if (draggingRow) draggingRow.classList.remove("dragging");
-      draggingRow = null;
-    }
-  });
-
-  tbody.addEventListener("dragend", () => {
-    if (draggingRow) draggingRow.classList.remove("dragging");
-    draggingRow = null;
-  });
-
-  // ========= ENTER en input de orden (sin recargar) =========
-  document.querySelectorAll(".orden-input").forEach(input => {
-    input.addEventListener("keydown", async (e) => {
-      if (e.key !== "Enter") return;
-      e.preventDefault();
-
-      const tr = input.closest("tr.fila-cliente");
-      if (!tr) return;
-
-      const id = input.dataset.id;
-      const nuevaPos = parseInt(input.value || "0", 10);
-      if (!nuevaPos || nuevaPos < 1) return alert("Orden inválido.");
-
-      // Optimista: mover DOM localmente
-      const arr = filas();
-      const fromIdx = arr.indexOf(tr);
-      const toIdx = Math.min(Math.max(nuevaPos - 1, 0), arr.length - 1);
-      moverFilaDom(fromIdx, toIdx);
-
-      try {
-        const res = await fetch(`/actualizar_orden/${id}`, {
-          method: "POST",
-          headers: {"Content-Type": "application/x-www-form-urlencoded"},
-          body: `orden=${nuevaPos}`
-        });
-        const txt = await res.text();
-        if (txt !== "OK") {
-          alert("❌ No se pudo guardar el nuevo orden. Se recargará la página.");
-          location.reload();
-        }
-      } catch (err) {
-        alert("❌ Error de conexión guardando el nuevo orden. Se recargará la página.");
-        location.reload();
-      }
-    });
-  });
-});
-</script>
-
 {% endblock %}
