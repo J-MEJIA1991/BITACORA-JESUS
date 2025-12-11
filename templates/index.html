@@ -2,30 +2,28 @@
 {% block title %}Inicio{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">📋 Listado de Clientes</h2>
-<p class="text-end text-muted mb-3">🕒 Hora actual en Chile: <span id="horaChile"></span></p>
 
-<!-- =================== BOTONES PRINCIPALES =================== -->
-<div class="mb-3 d-flex flex-wrap gap-2">
-  <!-- 🔹 Este botón usa el MISMO JS que el del menú hamburguesa -->
-  <button
-    type="button"
-    class="btn btn-primary"
-    data-open-nuevo-cliente="1">
-    ➕ Nuevo Cliente
-  </button>
+<!-- =================== BARRA SUPERIOR: LISTADO + RELOJ =================== -->
+<div class="barra-superior-clientes">
+  <div class="barra-superior-titulo">
+    <span class="emoji">📋</span>
+    <span>Listado de clientes</span>
+  </div>
 
-  <a class="btn btn-secondary" href="{{ url_for('app_rutas.liquidacion_view') }}">📊 Ver Liquidación</a>
-  <a class="btn btn-outline-dark" href="{{ url_for('app_rutas.clientes_cancelados_view') }}">🚫 Cancelados</a>
-  <a class="btn btn-outline-primary" href="{{ url_for('app_rutas.dashboard') }}">📈 Dashboard</a>
-  <a class="btn btn-outline-success" href="{{ url_for('app_rutas.ganancias_mes_view') }}">💰 Ganancias</a>
+  <div class="reloj-digital">
+    <span class="label">Hora Chile</span>
+    <!-- usamos el mismo span que ya actualizas con JS -->
+    <span class="hora" id="horaChile"></span>
+  </div>
 </div>
 
 <!-- =================== BUSCADOR DE CLIENTES =================== -->
 <div class="mb-3">
-  <input type="text" id="buscarCliente" class="form-control" placeholder="🔍 Buscar cliente por nombre...">
+  <input type="text" id="buscarCliente" class="form-control"
+         placeholder="🔍 Buscar cliente por nombre...">
 </div>
 
+{# aquí ya seguiría tu tabla de clientes como la tienes ahora #}
 <!-- =================== TABLA DE CLIENTES =================== -->
 {% if clientes %}
 <table id="tabla-clientes" class="table table-bordered table-hover align-middle text-center">
@@ -185,19 +183,31 @@
 
 <!-- =================== MODAL HISTORIAL (SALDO CLICK) =================== -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+  <div class="modal-dialog modal-fullscreen modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
+      
+      <!-- HEADER -->
       <div class="modal-header bg-primary text-white">
         <h5 class="modal-title" id="modalHistorialLabel">📘 Detalles del Cliente</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
+
+      <!-- BODY -->
       <div class="modal-body">
+
+        <!-- DATOS DEL PRÉSTAMO -->
         <h6 class="fw-bold mb-3">Datos del Préstamo</h6>
-        <table class="table table-sm table-bordered align-middle text-center">
+        <table class="table table-bordered align-middle text-center">
           <thead class="table-light">
             <tr>
-              <th>Nombre</th><th>Fecha inicial</th><th>Monto</th><th>Total</th>
-              <th>Cuota</th><th>Modo</th><th>Datos</th><th>Saldo</th>
+              <th>Nombre</th>
+              <th>Fecha inicial</th>
+              <th>Monto</th>
+              <th>Total</th>
+              <th>Cuota</th>
+              <th>Modo</th>
+              <th>Datos</th>
+              <th>Saldo</th>
             </tr>
           </thead>
           <tbody id="tablaDatosPrestamo">
@@ -205,22 +215,28 @@
           </tbody>
         </table>
 
+        <!-- HISTORIAL DE ABONOS -->
         <h6 class="fw-bold mt-4 mb-3">Historial de Abonos</h6>
-        <table class="table table-sm table-bordered text-center align-middle">
+        <table class="table table-bordered text-center align-middle">
           <thead class="table-light">
             <tr>
-              <th>Código</th><th>Fecha</th><th>Hora</th><th>Abono</th><th>Saldo</th><th>Acción</th>
+              <th>Código</th>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Abono</th>
+              <th>Saldo</th>
+              <th>Acción</th>
             </tr>
           </thead>
           <tbody id="tablaHistorialBody">
             <tr><td colspan="6"><em>Cargando...</em></td></tr>
           </tbody>
         </table>
+
       </div>
     </div>
   </div>
 </div>
-
 <!-- =================== SCRIPTS PRINCIPALES =================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -588,6 +604,60 @@ document.addEventListener("DOMContentLoaded", () => {
 }
 .resaltado-reactivado.fade-out {
   background-color: transparent !important;
+}
+
+/* ⭐⭐⭐ BARRA SUPERIOR + RELOJ DIGITAL ⭐⭐⭐ */
+
+.barra-superior-clientes {
+  width: 100%;
+  background-color: #000;
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.barra-superior-titulo {
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.barra-superior-titulo span.emoji {
+  font-size: 1.2rem;
+}
+
+.reloj-digital {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: "Courier New", monospace;
+}
+
+.reloj-digital .label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.reloj-digital .hora {
+  padding: 0.18rem 0.7rem;
+  border-radius: 0.35rem;
+  background: #111;
+  border: 1px solid #444;
+  box-shadow: 0 0 8px rgba(0, 255, 149, 0.45);
+  color: #00ff95;
+  letter-spacing: 0.09em;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 </style>
 {% endblock %}
