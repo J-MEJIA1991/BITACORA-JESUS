@@ -50,7 +50,7 @@
   <!-- 🔝 Barra de navegación -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="{{ url_for('app_rutas.index') }}">💼 Sistema de Préstamos</a>
+      <a class="navbar-brand fw-bold" href="{{ url_for('app_rutas.index') }}">📋 Listado de clientes</a>
 
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-controls="menuPrincipal" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -74,6 +74,9 @@
           </li>
         </ul>
 
+        <!-- ❤️❤️❤️ AGREGADO PARA EL RELOJ (que faltaba en tu archivo original) ❤️❤️❤️ -->
+        <span class="text-white fw-semibold ms-3" id="horaChile"></span>
+
         <a href="{{ url_for('app_rutas.logout') }}" class="btn btn-danger btn-sm ms-lg-3 mt-2 mt-lg-0">Salir ✖</a>
       </div>
     </div>
@@ -96,7 +99,7 @@
 
   <!-- 🦶 Pie de página -->
   <footer class="text-center">
-    <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos — Desarrollado con ❤️ por Manuel Herrera</small>
+    <small>© {{ hoy.year if hoy else '2025' }} Sistema de Préstamos </small>
   </footer>
 
   <!-- 🔄 Toast “Procesando...” -->
@@ -133,6 +136,7 @@
       const a = document.getElementById("audioReactivaCliente");
       if(a) a.play().catch(()=>{});
     }
+
     function resaltarClienteReactivado(id){
       if(!window.location.pathname.endsWith("/")) return;
       const fila = document.querySelector("#cliente-row-" + id);
@@ -146,18 +150,19 @@
         },1500);
       },50);
     }
+
     function scrollToCliente(id){
       if(!window.location.pathname.endsWith("/")) return;
       const fila = document.querySelector("#cliente-row-" + id);
       if(fila) fila.scrollIntoView({ behavior:"smooth", block:"center" });
     }
 
-    // ===================== RELOJ CHILE =====================
+    // ===================== RELOJ CHILE (CORREGIDO) =====================
     function actualizarRelojChile() {
       const opciones = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-      const ahoraChile = new Date().toLocaleTimeString('es-CL', opciones);
-      const elemento = document.getElementById('horaChile');
-      if (elemento) elemento.textContent = ahoraChile;
+      const ahora = new Date().toLocaleTimeString('es-CL', opciones);
+      const lbl = document.getElementById('horaChile');
+      if (lbl) lbl.textContent = ahora;
     }
     setInterval(actualizarRelojChile, 1000);
     actualizarRelojChile();
@@ -172,21 +177,23 @@
         toast.style.display = "block";
         setTimeout(() => (toast.style.opacity = "1"), 50);
       }
+
       function ocultarProcesando() {
         visible = false;
         toast.style.opacity = "0";
         setTimeout(() => (toast.style.display = "none"), 300);
       }
+
       window.mostrarProcesando = mostrarProcesando;
       window.ocultarProcesando = ocultarProcesando;
 
-      // Mostrar "Procesando..." en formularios y links normales
       document.querySelectorAll("form").forEach(form => {
         form.addEventListener("submit", () => {
           mostrarProcesando();
           setTimeout(ocultarProcesando, 8000);
         });
       });
+
       document.querySelectorAll("a[href]").forEach(link => {
         const href = link.getAttribute("href");
         if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank") return;
@@ -200,7 +207,6 @@
       const modalBody = document.getElementById("modalNuevoClienteBody");
       const modalNuevoCliente = modalEl ? new bootstrap.Modal(modalEl) : null;
 
-      // ========== FUNCIÓN PARA INICIALIZAR EL FORMULARIO DENTRO DEL MODAL ==========
       function inicializarFormularioNuevoCliente() {
         if (!modalBody) return;
         const form = modalBody.querySelector("#formCliente");
@@ -216,7 +222,6 @@
         const lblCuotas = modalBody.querySelector("#lblCuotas");
         const lblCuota  = modalBody.querySelector("#lblCuota");
 
-        // ⚙️ Generar código aleatorio
         if (btnGenerarCodigo && codigo) {
           btnGenerarCodigo.addEventListener("click", () => {
             let c = "";
@@ -228,7 +233,6 @@
           });
         }
 
-        // 📈 Cálculo de total, cuotas, valor de cuota
         function calcular() {
           const m = parseFloat(monto && monto.value ? monto.value : "0") || 0;
           const i = parseFloat(interes && interes.value ? interes.value : "0") || 0;
@@ -268,7 +272,6 @@
           e.addEventListener("change", calcular);
         });
 
-        // 💾 Enviar formulario por AJAX
         form.addEventListener("submit", async (e) => {
           e.preventDefault();
           const fd = new FormData(form);
@@ -287,14 +290,12 @@
               return;
             }
 
-            // Opcional: guardar en sessionStorage
             if (data.cliente) {
               try {
                 sessionStorage.setItem("nuevo_cliente", JSON.stringify(data.cliente));
               } catch {}
             }
 
-            // Volver al index
             window.location.href = "{{ url_for('app_rutas.index') }}";
 
           } catch (err) {
@@ -306,7 +307,6 @@
         });
       }
 
-      // ========== CARGAR FORMULARIO EN EL MODAL VIA FETCH ==========
       async function cargarFormularioNuevoCliente() {
         if (!modalNuevoCliente || !modalBody) return;
         modalBody.innerHTML = `
@@ -324,7 +324,6 @@
           const html = await resp.text();
           modalBody.innerHTML = html;
 
-          // Muy importante: enganchar eventos en el formulario recién insertado
           inicializarFormularioNuevoCliente();
 
         } catch (err) {
@@ -338,7 +337,6 @@
         }
       }
 
-      // ========== BOTONES QUE ABREN EL MODAL DE NUEVO CLIENTE ==========
       document.querySelectorAll("[data-open-nuevo-cliente]").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.preventDefault();
@@ -346,10 +344,12 @@
         });
       });
 
-      // Ocultar toast al terminar de cargar la página
       window.addEventListener("load", ocultarProcesando);
     });
   </script>
 
 </body>
 </html>
+
+
+
