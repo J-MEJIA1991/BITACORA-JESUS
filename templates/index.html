@@ -12,160 +12,124 @@
 {# aquí ya seguiría tu tabla de clientes como la tienes ahora #}
 <!-- =================== TABLA DE CLIENTES =================== -->
 {% if clientes %}
-<table id="tabla-clientes" class="table table-bordered table-hover align-middle text-center">
-  <thead class="table-dark">
-    <tr>
-      <th>Orden</th>
-      <th>Código</th>
-      <th>Fecha</th>
-      <th>Nombre</th>
-      <th>Venta</th>
-      <th>Cuota</th>
-      <th>Cuotas Atrasadas</th>
-      <th>Último Abono</th>
-      <th>Abonar</th>
-      <th>Saldo</th>
-      <th>Eliminar</th>
-    </tr>
-  </thead>
+<div class="table-responsive">
+  <table id="tabla-clientes" class="table table-bordered table-hover align-middle text-center">
+    <thead class="table-dark">
+      <tr>
+        <th>Orden</th>
+        <th>Código</th>
+        <th>Fecha</th>
+        <th>Nombre</th>
+        <th>Venta</th>
+        <th>Cuota</th>
+        <th>Cuotas Atrasadas</th>
+        <th>Último Abono</th>
+        <th>Abonar</th>
+        <th>Saldo</th>
+        <th>Eliminar</th>
+      </tr>
+    </thead>
 
-  <tbody>
-  {% for c in clientes %}
-    {# 🧮 Último préstamo del cliente (si tiene) #}
-    {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
+    <tbody>
+    {% for c in clientes %}
+      {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
 
-    <tr id="cliente-row-{{ c.id }}"
-    class="fila-cliente
-      {% if c.cancelado %}
-        cancelado
-      {% elif c.estado_plazo and c.estado_plazo|lower == 'vencido' %}
-        plazo-vencido
-      {% elif c.estado_plazo and c.estado_plazo|lower == 'moroso' %}
-        plazo-moroso
-      {% endif %}
-    ">
+      <tr id="cliente-row-{{ c.id }}"
+      class="fila-cliente
+        {% if c.cancelado %}
+          cancelado
+        {% elif c.estado_plazo and c.estado_plazo|lower == 'vencido' %}
+          plazo-vencido
+        {% elif c.estado_plazo and c.estado_plazo|lower == 'moroso' %}
+          plazo-moroso
+        {% endif %}
+      ">
 
-      <!-- ORDEN -->
-      <td style="width:100px;">
-        <input type="number"
-               class="form-control text-center orden-input"
-               value="{{ c.orden }}"
-               data-id="{{ c.id }}"
-               style="width:70px;"
-               {% if c.cancelado %}disabled{% endif %}>
-      </td>
+        <!-- ORDEN -->
+        <td style="width:100px;">
+          <input type="number"
+                 class="form-control text-center orden-input"
+                 value="{{ c.orden }}"
+                 data-id="{{ c.id }}"
+                 style="width:70px;"
+                 {% if c.cancelado %}disabled{% endif %}>
+        </td>
 
-      <!-- DATOS PRINCIPALES -->
-      <td>{{ c.codigo }}</td>
-      <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
-      <td class="nombre-cliente">{{ c.nombre }}</td>
+        <!-- DATOS PRINCIPALES -->
+        <td>{{ c.codigo }}</td>
+        <td>{{ c.fecha_creacion.strftime("%d/%m/%Y") }}</td>
+        <td class="nombre-cliente">{{ c.nombre }}</td>
 
-      <!-- MONTO PRESTADO (sin interés) -->
-      <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
+        <!-- MONTO PRESTADO (sin interés) -->
+        <td>{{ "%.2f"|format(c.capital_total_sin_interes()) }}</td>
 
-      <!-- CUOTA -->
-      <td>
-        {{ "%.2f"|format(c.valor_cuota()) }}
-        {% if c.prestamos %}
-          {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
-          {% if u.frecuencia %}
-            <small class="text-muted">({{ u.frecuencia }})</small>
+        <!-- CUOTA -->
+        <td>
+          {{ "%.2f"|format(c.valor_cuota()) }}
+          {% if c.prestamos %}
+            {% set u = (c.prestamos|sort(attribute='fecha'))|last %}
+            {% if u.frecuencia %}
+              <small class="text-muted">({{ u.frecuencia }})</small>
+            {% endif %}
           {% endif %}
-        {% endif %}
-      </td>
+        </td>
 
-      <!-- CUOTAS ATRASADAS -->
-      <td>{{ c.cuotas_atrasadas() }}</td>
+        <!-- CUOTAS ATRASADAS -->
+        <td>{{ c.cuotas_atrasadas() }}</td>
 
-      <!-- ÚLTIMO ABONO -->
-      <td id="ultimo-abono-{{ c.id }}">
-        {{ "%.2f"|format(c.ultimo_abono_monto()) }}
-      </td>
+        <!-- ÚLTIMO ABONO -->
+        <td id="ultimo-abono-{{ c.id }}">
+          {{ "%.2f"|format(c.ultimo_abono_monto()) }}
+        </td>
 
-      <!-- ABONAR -->
-      <td class="abono-td">
-        <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
-              method="post"
-              class="d-flex justify-content-center form-abono"
-              data-orden="{{ c.orden }}">
-          <input type="hidden" name="codigo" value="{{ c.codigo }}">
-          <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
-                 class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
-                 style="width:120px; height:50px; font-size:1.4rem;"
-                 required autocomplete="off">
-          <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
-        </form>
+        <!-- ABONAR -->
+        <td class="abono-td">
+          <form action="{{ url_for('app_rutas.registrar_abono_por_codigo') }}"
+                method="post"
+                class="d-flex justify-content-center form-abono"
+                data-orden="{{ c.orden }}">
+            <input type="hidden" name="codigo" value="{{ c.codigo }}">
+            <input type="number" step="0.01" min="0.01" name="monto" placeholder="0"
+                   class="form-control text-end abono-input fw-bold {% if c.ultimo_abono_fecha == hoy %}bg-success text-white{% endif %}"
+                   style="width:120px; height:50px; font-size:1.4rem;"
+                   required autocomplete="off">
+            <button type="submit" class="btn btn-success ms-2" style="font-size:1.4rem; padding:0 15px;">💵</button>
+          </form>
 
-        {% if c.cancelado %}
-          <small class="text-danger fw-bold d-block mt-1">Cancelado</small>
-        {% endif %}
-      </td>
+          {% if c.cancelado %}
+            <small class="text-danger fw-bold d-block mt-1">Cancelado</small>
+          {% endif %}
+        </td>
 
-      <!-- SALDO -->
-      <td>
-        {% if c.cancelado %}
-          <span class="text-muted saldo-texto" data-cliente-id="{{ c.id }}">0.00</span>
-        {% else %}
-          <button class="btn btn-link p-0 saldo-clickable saldo-texto" data-cliente-id="{{ c.id }}">
-            {{ "%.2f"|format(c.saldo_total()) }}
+        <!-- SALDO -->
+        <td>
+          {% if c.cancelado %}
+            <span class="text-muted saldo-texto" data-cliente-id="{{ c.id }}">0.00</span>
+          {% else %}
+            <button class="btn btn-link p-0 saldo-clickable saldo-texto" data-cliente-id="{{ c.id }}">
+              {{ "%.2f"|format(c.saldo_total()) }}
+            </button>
+          {% endif %}
+        </td>
+
+        <!-- 🗑️ ELIMINAR CLIENTE -->
+        <td>
+          <button class="btn btn-danger btn-sm eliminar-cliente-btn"
+                  data-id="{{ c.id }}"
+                  data-nombre="{{ c.nombre }}">
+            🗑️ Eliminar
           </button>
-        {% endif %}
-      </td>
-
-      <!-- 🗑️ ELIMINAR CLIENTE -->
-      <td>
-        <button class="btn btn-danger btn-sm eliminar-cliente-btn"
-                data-id="{{ c.id }}"
-                data-nombre="{{ c.nombre }}">
-          🗑️ Eliminar
-        </button>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
   <div class="alert alert-info text-center mt-4">
     No hay clientes registrados aún.
   </div>
 {% endif %}
-
-<!-- =================== MODAL EDITAR PRÉSTAMO =================== -->
-<div class="modal fade" id="modalEditarPrestamo" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="formEditarPrestamo" method="POST">
-        <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title">Editar Préstamo de <span id="clienteNombre"></span></h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">Plazo (días)</label>
-            <input type="number" name="plazo" id="editarPlazo" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Interés (%)</label>
-            <input type="number" step="0.01" name="interes" id="editarInteres" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Frecuencia</label>
-            <select name="frecuencia" id="editarFrecuencia" class="form-select">
-              <option value="diario">Diario</option>
-              <option value="semanal">Semanal</option>
-              <option value="quincenal">Quincenal</option>
-              <option value="mensual">Mensual</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-success">Guardar Cambios</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <!-- =================== MODAL HISTORIAL (SALDO CLICK) =================== -->
 <div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
@@ -223,7 +187,8 @@
     </div>
   </div>
 </div>
-<!-- =================== SCRIPTS PRINCIPALES =================== -->
+
+<!-- =================== SCRIPTS =================== -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   // ==================================================
@@ -245,50 +210,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ==================================================
-  //  ✏️ EDITAR PRÉSTAMO (protegido)
-  // ==================================================
-  const modalEditarEl = document.getElementById("modalEditarPrestamo");
-  const formEditar = document.getElementById("formEditarPrestamo");
-  let modalEditar = null;
-
-  if (modalEditarEl && formEditar && window.bootstrap) {
-    modalEditar = new bootstrap.Modal(modalEditarEl);
-
-    document.querySelectorAll(".editar-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.id;
-        document.getElementById("clienteNombre").textContent = btn.dataset.nombre;
-        try {
-          const res = await fetch(`/editar_prestamo/${id}`);
-          const data = await res.json();
-          if (!data.ok) return alert(data.error || "Error al cargar datos.");
-          document.getElementById("editarPlazo").value = data.data.plazo;
-          document.getElementById("editarInteres").value = data.data.interes;
-          document.getElementById("editarFrecuencia").value = data.data.frecuencia || "diario";
-          formEditar.dataset.id = id;
-          modalEditar.show();
-        } catch {
-          alert("Error de conexión.");
-        }
-      });
-    });
-
-    formEditar.addEventListener("submit", async e => {
-      e.preventDefault();
-      const id = formEditar.dataset.id;
-      const fd = new FormData(formEditar);
-      const res = await fetch(`/editar_prestamo/${id}`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (data.ok) {
-        alert("✅ Cambios guardados.");
-        location.reload();
-      } else {
-        alert("❌ " + (data.error || "Error al guardar."));
-      }
-    });
-  }
-
-  // ==================================================
   //  💰 REGISTRAR ABONOS EN VIVO
   // ==================================================
   const forms = document.querySelectorAll(".form-abono");
@@ -302,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const res = await fetch(form.action, {
           method: "POST",
           body: formData,
-          headers: { "X-Requested-With": "fetch" }
+          headers: { "X-Requested-With": "fetch" } // 👈 importante
         });
         const data = await res.json();
 
@@ -352,8 +273,9 @@ document.addEventListener("DOMContentLoaded", () => {
           setTimeout(() => saldoElem.style.backgroundColor = "", 800);
         }
 
-        // 🟡 ACTUALIZAR "ÚLTIMO ABONO" MOSTRANDO EL MONTO
+        // 🟡 ACTUALIZAR "ÚLTIMO ABONO" MOSTRANDO **EL MONTO**
         const celdaUltimo = document.getElementById(`ultimo-abono-${data.cliente_id}`);
+        console.log("👉 Monto recibido para último abono:", data.monto);
         if (celdaUltimo && typeof data.monto !== "undefined") {
           celdaUltimo.textContent = Number(data.monto).toFixed(2);
         }
@@ -376,14 +298,11 @@ document.addEventListener("DOMContentLoaded", () => {
           setTimeout(() => toast.remove(), 4000);
         }
 
-        // ✨ limpiar input y dejarlo verde un rato
+        // ✨ limpiar input y DEJARLO verde (abonó hoy)
         if (input) {
-          input.value = "";
-          input.classList.add("bg-success", "text-white");
-          setTimeout(() => {
-            input.classList.remove("bg-success", "text-white");
-          }, 5000);
-        }
+                         input.value = "";
+                        input.classList.add("bg-success", "text-white");
+                 }
 
       } catch (err) {
         playSound(false);
@@ -393,7 +312,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ==================================================
+
+   // ==================================================
   //  📘 HISTORIAL DE ABONOS (click en saldo)
   // ==================================================
   const modalHistorialEl = document.getElementById("modalHistorial");
@@ -472,7 +392,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ==================================================
-  //  🗑️ ELIMINAR ABONO (desde el modal)
+  //  🗑️ ELIMINAR ABONO
   // ==================================================
   document.addEventListener("click", async (e) => {
     if (!e.target.classList.contains("eliminar-abono")) return;
@@ -511,9 +431,9 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Error de conexión al eliminar abono.");
     }
   });
-
 });
 </script>
+
 
 <!-- =================== BUSCADOR EN TIEMPO REAL =================== -->
 <script>
@@ -539,6 +459,316 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 {% endif %}
+
+<!-- =================== ESTILOS =================== -->
+<style>
+/* 🚫 Cliente cancelado */
+.cancelado {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* 🟠 Plazo vencido (en advertencia) */
+.plazo-vencido {
+  background-color: rgba(255,165,0,0.15) !important;
+}
+
+/* 🔴 Plazo moroso (grave) */
+.plazo-moroso {
+  background-color: rgba(255,0,0,0.15) !important;
+}
+
+/* 🔴 Interés mensual vencido */
+.interes-vencido {
+  background-color: rgba(255, 0, 0, 0.1) !important; /* fondo rojo suave */
+  border-left: 4px solid #ff4d4d; /* borde rojo lateral */
+  animation: parpadeoInteres 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes parpadeoInteres {
+  from { background-color: rgba(255, 0, 0, 0.1); }
+  to { background-color: rgba(255, 0, 0, 0.25); }
+}
+
+/* 💰 Celda de abono */
+.abono-td form {
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+}
+
+/* 💵 Saldo clickeable (abre historial) */
+.saldo-clickable {
+  font-size: 1em;
+  font-weight: bold;
+  color: #0d6efd;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ✅ Animación verde al registrar abono */
+.fila-parpadea {
+  animation: parpadeoVerde 1s ease-out;
+}
+
+@keyframes parpadeoVerde {
+  0% { background-color: #d4edda; }
+  50% { background-color: #b6e0c3; }
+  100% { background-color: transparent; }
+}
+</style>
+
+{% if resaltado_id %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const fila = document.querySelector(`#cliente-row-{{ resaltado_id }}`);
+  if (fila) {
+    fila.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => {
+      const inputAbono = fila.querySelector("input[name='monto']");
+      if (inputAbono) {
+        inputAbono.focus();
+        inputAbono.style.transition = "box-shadow 0.6s ease";
+        inputAbono.style.boxShadow = "0 0 10px rgba(0,123,255,0.6)";
+        setTimeout(() => inputAbono.style.boxShadow = "", 1000);
+      }
+    }, 500);
+  }
+});
+</script>
+{% endif %}
+
+<!-- =================== ELIMINAR CLIENTE SIN RECARGAR =================== -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".eliminar-cliente-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const nombre = btn.dataset.nombre;
+
+      if (!confirm(`¿Seguro que deseas eliminar a ${nombre}? Esta acción no se puede deshacer.`))
+        return;
+
+      try {
+        const res = await fetch(`/eliminar_cliente/${id}`, {
+          method: "POST",
+          headers: { "X-Requested-With": "fetch" }
+        });
+        const data = await res.json();
+
+        if (!data.ok) {
+          alert("❌ " + (data.error || "No se pudo eliminar el cliente."));
+          return;
+        }
+
+        // 💨 Desvanecer fila eliminada
+        const fila = document.getElementById(`cliente-row-${id}`);
+        if (fila) {
+          fila.style.transition = "opacity 0.5s ease, transform 0.5s ease";
+          fila.style.opacity = "0";
+          fila.style.transform = "translateX(-20px)";
+          setTimeout(() => fila.remove(), 500);
+        }
+
+        // ✅ Mensaje visual
+        const toast = document.createElement("div");
+        toast.className = "alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3 shadow";
+        toast.style.zIndex = 2000;
+        toast.textContent = `🗑️ Cliente ${nombre} eliminado correctamente.`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+
+      } catch (err) {
+        alert("❌ Error al eliminar el cliente.");
+        console.error(err);
+      }
+    });
+  });
+});
+</script>
+
+<style>
+/* 🔧 Estilos drag & drop */
+.drag-handle {
+  cursor: grab;
+  user-select: none;
+  font-size: 1.1rem;
+}
+tr.dragging {
+  opacity: 0.6;
+}
+tr.drop-target {
+  outline: 2px dashed #0d6efd;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const tbody = document.querySelector("#tabla-clientes tbody");
+  if (!tbody) return;
+
+  // ========= UTILIDADES =========
+  const filaPorEvento = (e) => e.target.closest("tr.fila-cliente");
+  const getOrdenInput = (tr) => tr.querySelector(".orden-input");
+  const getClienteId = (tr) => tr.id.replace("cliente-row-", "");
+  const filas = () => Array.from(tbody.querySelectorAll("tr.fila-cliente"));
+  const esCancelado = (tr) => tr.classList.contains("cancelado");
+
+  // Re-numera visualmente los inputs de orden (1..n)
+  function renumerarVisual() {
+    filas().forEach((tr, i) => {
+      const inp = getOrdenInput(tr);
+      if (inp) inp.value = i + 1;
+    });
+  }
+
+  // Mueve en el DOM la fila desde un índice a otro (optimista)
+  function moverFilaDom(idxFrom, idxTo) {
+    const arr = filas();
+    const row = arr[idxFrom];
+    const ref = arr[idxTo];
+    if (!row || !ref || row === ref) return;
+    if (idxTo > idxFrom) {
+      // insertar después
+      ref.after(row);
+    } else {
+      // insertar antes
+      ref.before(row);
+    }
+    renumerarVisual();
+  }
+
+  // ========= DRAG & DROP =========
+  let draggingRow = null;
+
+  // Añade manija y atributos a cada fila (excepto cancelados)
+  filas().forEach(tr => {
+    if (esCancelado(tr)) return;
+    tr.setAttribute("draggable", "true");
+    // Si no tiene manija, la creamos en la celda de orden
+    const ordenTd = tr.querySelector("td:first-child");
+    if (ordenTd && !ordenTd.querySelector(".drag-handle")) {
+      const handle = document.createElement("span");
+      handle.className = "drag-handle ms-1";
+      handle.title = "Arrastra para reordenar";
+      handle.textContent = "⋮⋮";
+      ordenTd.prepend(handle);
+    }
+  });
+
+  tbody.addEventListener("dragstart", (e) => {
+    const tr = filaPorEvento(e);
+    if (!tr || esCancelado(tr)) return;
+    draggingRow = tr;
+    tr.classList.add("dragging");
+    // mejora UX: imagen transparente
+    const img = new Image(); img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+    e.dataTransfer.setDragImage(img, 0, 0);
+  });
+
+  tbody.addEventListener("dragover", (e) => {
+    if (!draggingRow) return;
+    e.preventDefault();
+    const over = filaPorEvento(e);
+    filas().forEach(r => r.classList.remove("drop-target"));
+    if (over && over !== draggingRow) over.classList.add("drop-target");
+  });
+
+  tbody.addEventListener("dragleave", (e) => {
+    const tr = filaPorEvento(e);
+    if (tr) tr.classList.remove("drop-target");
+  });
+
+  tbody.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const target = filaPorEvento(e);
+    filas().forEach(r => r.classList.remove("drop-target"));
+    if (!draggingRow || !target || draggingRow === target) {
+      if (draggingRow) draggingRow.classList.remove("dragging");
+      draggingRow = null;
+      return;
+    }
+
+    // Índices actuales
+    const arr = filas();
+    const fromIdx = arr.indexOf(draggingRow);
+    const toIdx = arr.indexOf(target);
+
+    // Optimista: mover en DOM y renumerar inputs
+    moverFilaDom(fromIdx, toIdx);
+
+    // Enviar al backend: nueva posición (1-based)
+    const id = getClienteId(draggingRow);
+    const nuevaPos = arr.indexOf(target) === -1
+      ? toIdx + 1
+      : filas().indexOf(draggingRow) + 1; // tras mover, recalcula
+
+    try {
+      const res = await fetch(`/actualizar_orden/${id}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: `orden=${nuevaPos}`
+      });
+      const txt = await res.text();
+
+      if (txt !== "OK") {
+        // Revertir (si el backend no aceptó)
+        // Simplemente recargamos para recuperar estado real
+        alert("❌ No se pudo guardar el nuevo orden. Se recargará la página.");
+        location.reload();
+      }
+    } catch (err) {
+      alert("❌ Error de conexión guardando el nuevo orden. Se recargará la página.");
+      location.reload();
+    } finally {
+      if (draggingRow) draggingRow.classList.remove("dragging");
+      draggingRow = null;
+    }
+  });
+
+  tbody.addEventListener("dragend", () => {
+    if (draggingRow) draggingRow.classList.remove("dragging");
+    draggingRow = null;
+  });
+
+  // ========= ENTER en input de orden (sin recargar) =========
+  document.querySelectorAll(".orden-input").forEach(input => {
+    input.addEventListener("keydown", async (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+
+      const tr = input.closest("tr.fila-cliente");
+      if (!tr) return;
+
+      const id = input.dataset.id;
+      const nuevaPos = parseInt(input.value || "0", 10);
+      if (!nuevaPos || nuevaPos < 1) return alert("Orden inválido.");
+
+      // Optimista: mover DOM localmente
+      const arr = filas();
+      const fromIdx = arr.indexOf(tr);
+      const toIdx = Math.min(Math.max(nuevaPos - 1, 0), arr.length - 1);
+      moverFilaDom(fromIdx, toIdx);
+
+      try {
+        const res = await fetch(`/actualizar_orden/${id}`, {
+          method: "POST",
+          headers: {"Content-Type": "application/x-www-form-urlencoded"},
+          body: `orden=${nuevaPos}`
+        });
+        const txt = await res.text();
+        if (txt !== "OK") {
+          alert("❌ No se pudo guardar el nuevo orden. Se recargará la página.");
+          location.reload();
+        }
+      } catch (err) {
+        alert("❌ Error de conexión guardando el nuevo orden. Se recargará la página.");
+        location.reload();
+      }
+    });
+  });
+});
+</script>
 
 <!-- =================== ESTILOS =================== -->
 <style>
@@ -647,3 +877,5 @@ document.addEventListener("DOMContentLoaded", () => {
 }
 </style>
 {% endblock %}
+
+
