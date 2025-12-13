@@ -145,7 +145,7 @@
       <!-- BODY -->
       <div class="modal-body">
 
-        <!-- DATOS DEL PRÉSTAMO -->
+        <!-- ================= DATOS DEL PRÉSTAMO ================= -->
         <h6 class="fw-bold mb-3">Datos del Préstamo</h6>
         <table class="table table-bordered align-middle text-center">
           <thead class="table-light">
@@ -165,11 +165,12 @@
           </tbody>
         </table>
 
-        <!-- HISTORIAL DE ABONOS -->
+        <!-- ================= HISTORIAL DE ABONOS ================= -->
         <h6 class="fw-bold mt-4 mb-3">Historial de Abonos</h6>
         <table class="table table-bordered text-center align-middle">
           <thead class="table-light">
             <tr>
+              <th>Cuota</th>
               <th>Código</th>
               <th>Fecha</th>
               <th>Hora</th>
@@ -179,7 +180,7 @@
             </tr>
           </thead>
           <tbody id="tablaHistorialBody">
-            <tr><td colspan="6"><em>Cargando...</em></td></tr>
+            <tr><td colspan="7"><em>Cargando...</em></td></tr>
           </tbody>
         </table>
 
@@ -313,83 +314,93 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 
-   // ==================================================
-  //  📘 HISTORIAL DE ABONOS (click en saldo)
-  // ==================================================
-  const modalHistorialEl = document.getElementById("modalHistorial");
-  let modalHistorial = null;
-  if (modalHistorialEl && window.bootstrap) {
-    modalHistorial = new bootstrap.Modal(modalHistorialEl);
-  }
+// ==================================================
+//  📘 HISTORIAL DE ABONOS (click en saldo)
+// ==================================================
+const modalHistorialEl = document.getElementById("modalHistorial");
+let modalHistorial = null;
+if (modalHistorialEl && window.bootstrap) {
+  modalHistorial = new bootstrap.Modal(modalHistorialEl);
+}
 
-  document.querySelectorAll(".saldo-clickable").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-cliente-id");
+document.querySelectorAll(".saldo-clickable").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.getAttribute("data-cliente-id");
 
-      if (!id) {
-        alert("No se pudo obtener el ID del cliente.");
+    if (!id) {
+      alert("No se pudo obtener el ID del cliente.");
+      return;
+    }
+
+    const datos = document.getElementById("tablaDatosPrestamo");
+    const tbody = document.getElementById("tablaHistorialBody");
+
+    datos.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><em>Cargando...</em></td></tr>`;
+
+    try {
+      const res = await fetch(`/historial_abonos/${id}`);
+      const data = await res.json();
+
+      if (!data.ok) {
+        const msg = data.error || "Este cliente no tiene préstamo registrado.";
+        datos.innerHTML = `<tr><td colspan="8"><em>${msg}</em></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7"><em>${msg}</em></td></tr>`;
+        if (modalHistorial) modalHistorial.show();
         return;
       }
 
-      const datos = document.getElementById("tablaDatosPrestamo");
-      const tbody = document.getElementById("tablaHistorialBody");
+      const p = data.prestamo;
 
-      datos.innerHTML = `<tr><td colspan="8"><em>Cargando...</em></td></tr>`;
-      tbody.innerHTML = `<tr><td colspan="6"><em>Cargando...</em></td></tr>`;
+      datos.innerHTML = `
+        <tr>
+          <td>${p.nombre}</td>
+          <td>${p.fecha_inicial}</td>
+          <td>$${Number(p.monto || 0).toFixed(2)}</td>
+          <td>$${Number(p.total || 0).toFixed(2)}</td>
+          <td>$${Number(p.cuota || 0).toFixed(2)}</td>
+          <td>${p.modo}</td>
+          <td>${p.datos}</td>
+          <td>$${Number(p.saldo || 0).toFixed(2)}</td>
+        </tr>`;
 
-      try {
-        const res = await fetch(`/historial_abonos/${id}`);
-        const data = await res.json();
+      const abonos = Array.isArray(data.abonos) ? data.abonos : [];
+      const totalCuotas = abonos.length;
 
-        if (!data.ok) {
-          const msg = data.error || "Este cliente no tiene préstamo registrado.";
-          datos.innerHTML = `<tr><td colspan="8"><em>${msg}</em></td></tr>`;
-          tbody.innerHTML = `<tr><td colspan="6"><em>${msg}</em></td></tr>`;
-          if (modalHistorial) modalHistorial.show();
-          return;
-        }
+      tbody.innerHTML = totalCuotas
+        ? abonos.map((a, index) => {
+            const numeroCuota = index + 1;
 
-        const p = data.prestamo;
+            const btnEliminar = a.id > 0
+              ? '<button class="btn btn-danger btn-sm eliminar-abono" data-id="' + a.id + '" data-cliente="' + id + '">🗑️</button>'
+              : '<span>—</span>';
 
-        datos.innerHTML = `
-          <tr>
-            <td>${p.nombre}</td>
-            <td>${p.fecha_inicial}</td>
-            <td>$${p.monto.toFixed(2)}</td>
-            <td>$${p.total.toFixed(2)}</td>
-            <td>$${p.cuota.toFixed(2)}</td>
-            <td>${p.modo}</td>
-            <td>${p.datos}</td>
-            <td>$${p.saldo.toFixed(2)}</td>
-          </tr>`;
+            return `
+              <tr>
+                <td>
+                  <span class="badge bg-primary">
+                    ${numeroCuota} / ${totalCuotas}
+                  </span>
+                </td>
+                <td>${a.codigo}</td>
+                <td>${a.fecha}</td>
+                <td>${a.hora}</td>
+                <td>$${Number(a.monto || 0).toFixed(2)}</td>
+                <td>$${Number(a.saldo || 0).toFixed(2)}</td>
+                <td>${btnEliminar}</td>
+              </tr>`;
+          }).join("")
+        : `<tr><td colspan="7"><em>Este cliente no tiene abonos registrados.</em></td></tr>`;
 
-        tbody.innerHTML = data.abonos.length
-          ? data.abonos.map(a => {
-              const btnEliminar = a.id > 0
-                ? '<button class="btn btn-danger btn-sm eliminar-abono" data-id="' + a.id + '" data-cliente="' + id + '">🗑️</button>'
-                : '<span>—</span>';
+      if (modalHistorial) modalHistorial.show();
 
-              return `
-                <tr>
-                  <td>${a.codigo}</td>
-                  <td>${a.fecha}</td>
-                  <td>${a.hora}</td>
-                  <td>$${a.monto.toFixed(2)}</td>
-                  <td>$${a.saldo.toFixed(2)}</td>
-                  <td>${btnEliminar}</td>
-                </tr>`;
-            }).join("")
-          : `<tr><td colspan="6"><em>Este cliente no tiene abonos registrados.</em></td></tr>`;
-
-        if (modalHistorial) modalHistorial.show();
-
-      } catch (err) {
-        datos.innerHTML = `<tr><td colspan="8"><em>Error al conectar.</em></td></tr>`;
-        tbody.innerHTML = `<tr><td colspan="6"><em>No se pudo cargar el historial.</em></td></tr>`;
-        if (modalHistorial) modalHistorial.show();
-      }
-    });
+    } catch (err) {
+      datos.innerHTML = `<tr><td colspan="8"><em>Error al conectar.</em></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><em>No se pudo cargar el historial.</em></td></tr>`;
+      if (modalHistorial) modalHistorial.show();
+    }
   });
+});
 
   // ==================================================
   //  🗑️ ELIMINAR ABONO

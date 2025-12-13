@@ -128,24 +128,27 @@
 <!-- 📦 Modal de abonos -->
 <div class="modal fade" id="modalAbonos" tabindex="-1" aria-labelledby="modalAbonosLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
+    <div class="modal-content modal-abonos-content">
       <div class="modal-header bg-dark text-white">
         <h5 class="modal-title" id="modalAbonosLabel">📜 Historial de Abonos</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
-      <div class="modal-body">
-        <table class="table table-sm table-bordered text-center align-middle">
-          <thead class="table-light">
-            <tr>
-              <th>📅 Fecha</th>
-              <th>🕒 Hora</th>
-              <th>💰 Monto</th>
-            </tr>
-          </thead>
-          <tbody id="tablaAbonosBody">
-            <tr><td colspan="3"><em>Cargando...</em></td></tr>
-          </tbody>
-        </table>
+      <div class="modal-body modal-abonos-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered text-center align-middle mb-0 tabla-abonos">
+            <thead class="table-light">
+              <tr>
+                <th>🔢 Cuota</th>
+                <th>📅 Fecha</th>
+                <th>🕒 Hora</th>
+                <th>💰 Monto</th>
+              </tr>
+            </thead>
+            <tbody id="tablaAbonosBody">
+              <tr><td colspan="4"><em>Cargando...</em></td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -190,4 +193,37 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 </script>
+
+<style>
+  /* 🎯 Estilos exclusivos para el modal de ABONOS */
+  #modalAbonos .modal-abonos-content {
+    border-radius: 1rem;
+  }
+
+  #modalAbonos .modal-abonos-body {
+    display: block !important;    /* Por si algún estilo global puso flex o columnas raras */
+    padding: 1rem 1.25rem;
+  }
+
+  #modalAbonos .table.tabla-abonos {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #modalAbonos .tabla-abonos th,
+  #modalAbonos .tabla-abonos td {
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+    padding: 0.4rem 0.6rem;
+  }
+
+  #modalAbonos .tabla-abonos tbody tr:nth-child(odd) {
+    background-color: #f8f9fa;
+  }
+
+  #modalAbonos .tabla-abonos tbody tr:nth-child(even) {
+    background-color: #ffffff;
+  }
+</style>
 {% endblock %}
