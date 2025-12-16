@@ -97,8 +97,8 @@ app_rutas = Blueprint("app_rutas", __name__)
 # ======================================================
 # 🔐 LOGIN / AUTENTICACIÓN
 # ======================================================
-VALID_USER = os.getenv("APP_USER", "j-mejia")
-VALID_PASS = os.getenv("APP_PASS", "honny")
+VALID_USER = os.getenv("APP_USER", "mjesus40")
+VALID_PASS = os.getenv("APP_PASS", "198409")
 
 
 def login_required(f):
@@ -332,9 +332,8 @@ def logout():
     flash("Sesión cerrada correctamente.", "info")
     return redirect(url_for("app_rutas.login"))
 
-
 # ======================================================
-# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (AJAX + hilo)
+# 🧍‍♂️ NUEVO CLIENTE — CREACIÓN Y RENOVACIÓN (AJAX)
 # ======================================================
 @app_rutas.route("/nuevo_cliente", methods=["GET", "POST"])
 @login_required
@@ -351,15 +350,21 @@ def nuevo_cliente():
             monto = request.form.get("monto", type=float) or 0.0
             interes = request.form.get("interes", type=float) or 0.0
             plazo = request.form.get("plazo", type=int) or 0
-            orden = request.form.get("orden", type=int)  # puede venir None
+            orden = request.form.get("orden", type=int)
             frecuencia = (request.form.get("frecuencia") or "diario").strip().lower()
 
-            # 🔹 Frecuencia válida
-            FRECUENCIAS_VALIDAS = {"diario", "semanal", "quincenal", "mensual"}
+            # 🔹 Frecuencias válidas
+            FRECUENCIAS_VALIDAS = {
+                "diario",
+                "semanal",
+                "quincenal",
+                "mensual",          # cuotas normales (NO se toca)
+                "mensual_interes",  # solo interés renovable
+            }
             if frecuencia not in FRECUENCIAS_VALIDAS:
                 frecuencia = "diario"
 
-            # 🔹 Código obligatorio (clave del cliente)
+            # 🔹 Código obligatorio
             if not codigo:
                 msg = "Debe ingresar un código de cliente."
                 if es_fetch:
@@ -367,7 +372,7 @@ def nuevo_cliente():
                 flash(msg, "warning")
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
-            # 🔹 Calcular orden si no viene o viene inválido
+            # 🔹 Calcular orden si no viene
             if not orden or orden <= 0:
                 max_orden = (
                     db.session.query(func.coalesce(func.max(Cliente.orden), 0))
@@ -379,7 +384,7 @@ def nuevo_cliente():
 
             hoy = local_date()
 
-            # Buscar cliente por código (puede estar activo o cancelado)
+            # Buscar cliente por código
             cliente_existente = Cliente.query.filter_by(codigo=codigo).first()
 
             # ======================================================
@@ -393,23 +398,35 @@ def nuevo_cliente():
                     telefono=telefono or cliente_existente.telefono or "",
                     orden=orden,
                     fecha_creacion=hoy,
-                    ultimo_abono_fecha=None,
                     saldo=0.0,
                     cancelado=False,
+                    ultimo_abono_fecha=None,
                 )
-                db.session.add(nuevo)
-                db.session.flush()  # para obtener nuevo.id
 
-                # 🧩 Reordenar clientes activos (shifteamos los que están detrás)
+                # ✅ Mensual solo interés → iniciar vencimiento desde HOY
+                if frecuencia == "mensual_interes":
+                    nuevo.ultimo_interes_fecha = hoy
+                    nuevo.proximo_interes_fecha = hoy + timedelta(days=30)
+                else:
+                    nuevo.ultimo_interes_fecha = None
+                    nuevo.proximo_interes_fecha = None
+
+                db.session.add(nuevo)
+                db.session.flush()
+
+                # Reordenar clientes activos
                 Cliente.query.filter(
                     Cliente.id != nuevo.id,
                     Cliente.cancelado == False,
                     Cliente.orden >= nuevo.orden,
-                ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
+                ).update(
+                    {Cliente.orden: Cliente.orden + 1},
+                    synchronize_session=False,
+                )
 
-                # 💰 Crear préstamo de renovación (si hay monto)
+                # Crear préstamo si hay monto
                 if monto > 0:
-                    saldo_total = monto + (monto * (interes / 100.0))
+                    saldo_total = monto + (monto * interes / 100)
                     prestamo = Prestamo(
                         cliente_id=nuevo.id,
                         monto=monto,
@@ -430,32 +447,17 @@ def nuevo_cliente():
 
                 db.session.commit()
 
-                # 🧵 Recalcular en segundo plano (no bloquea la respuesta)
-                lanzar_recalculo_async(hoy)
+                # ❌ recalculo desactivado para evitar lentitud
+                # lanzar_recalculo_async(hoy)
 
-                # Respuesta AJAX
                 if es_fetch:
-                    return jsonify(
-                        {
-                            "ok": True,
-                            "cliente": {
-                                "id": nuevo.id,
-                                "nombre": nuevo.nombre,
-                                "codigo": nuevo.codigo,
-                                "orden": nuevo.orden,
-                                "saldo": float(nuevo.saldo or 0),
-                                "ultimo_abono": 0.0,
-                                "cancelado": False,
-                            }
-                        }
-                    ), 200
+                    return jsonify({"ok": True}), 200
 
-                # Respuesta normal (navegador)
                 flash(f"Cliente {nuevo.nombre} renovado correctamente.", "success")
                 return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
             # ======================================================
-            # ❌ Ya existe un cliente ACTIVO con ese código
+            # ❌ Código ya existe y está activo
             # ======================================================
             if cliente_existente and not cliente_existente.cancelado:
                 msg = "Ese código ya pertenece a un cliente activo."
@@ -465,7 +467,7 @@ def nuevo_cliente():
                 return redirect(url_for("app_rutas.nuevo_cliente"))
 
             # ======================================================
-            # 🆕 NUEVO CLIENTE (código no existe o solo había cancelados viejos)
+            # 🆕 NUEVO CLIENTE
             # ======================================================
             nuevo = Cliente(
                 nombre=nombre or codigo,
@@ -478,19 +480,31 @@ def nuevo_cliente():
                 cancelado=False,
                 ultimo_abono_fecha=None,
             )
+
+            # ✅ Mensual solo interés → iniciar vencimiento desde HOY
+            if frecuencia == "mensual_interes":
+                nuevo.ultimo_interes_fecha = hoy
+                nuevo.proximo_interes_fecha = hoy + timedelta(days=30)
+            else:
+                nuevo.ultimo_interes_fecha = None
+                nuevo.proximo_interes_fecha = None
+
             db.session.add(nuevo)
             db.session.flush()
 
-            # 🧩 Reordenar clientes activos (mismo criterio que en renovación)
+            # Reordenar clientes activos
             Cliente.query.filter(
                 Cliente.id != nuevo.id,
                 Cliente.cancelado == False,
                 Cliente.orden >= nuevo.orden,
-            ).update({Cliente.orden: Cliente.orden + 1}, synchronize_session=False)
+            ).update(
+                {Cliente.orden: Cliente.orden + 1},
+                synchronize_session=False,
+            )
 
-            # 💰 Préstamo inicial (si hay monto)
+            # Crear préstamo inicial
             if monto > 0:
-                saldo_total = monto + (monto * (interes / 100.0))
+                saldo_total = monto + (monto * interes / 100)
                 prestamo = Prestamo(
                     cliente_id=nuevo.id,
                     monto=monto,
@@ -511,27 +525,12 @@ def nuevo_cliente():
 
             db.session.commit()
 
-            # 🧵 Recalcular en segundo plano
-            lanzar_recalculo_async(hoy)
+            # ❌ recalculo desactivado para evitar lentitud
+            # lanzar_recalculo_async(hoy)
 
-            # Respuesta AJAX
             if es_fetch:
-                return jsonify(
-                    {
-                        "ok": True,
-                        "cliente": {
-                            "id": nuevo.id,
-                            "nombre": nuevo.nombre,
-                            "codigo": nuevo.codigo,
-                            "orden": nuevo.orden,
-                            "saldo": float(nuevo.saldo or 0),
-                            "ultimo_abono": 0.0,
-                            "cancelado": False,
-                        }
-                    }
-                ), 200
+                return jsonify({"ok": True}), 200
 
-            # Respuesta normal
             flash(f"Cliente {nuevo.nombre} creado correctamente.", "success")
             return redirect(url_for("app_rutas.index", focus_abono=nuevo.id))
 
@@ -539,8 +538,8 @@ def nuevo_cliente():
             db.session.rollback()
             print(f"[ERROR nuevo_cliente] {e}")
             if es_fetch:
-                return jsonify({"ok": False, "error": "Error inesperado."}), 500
-            flash("Ocurrió un error inesperado al crear o renovar el cliente.", "danger")
+                return jsonify({"ok": False, "error": "Error inesperado"}), 500
+            flash("Ocurrió un error inesperado.", "danger")
             return redirect(url_for("app_rutas.nuevo_cliente"))
 
     # ======================================================
@@ -1144,83 +1143,127 @@ def historial_abonos_json(cliente_id):
     })
 
 # ======================================================
-# 💰 REGISTRAR ABONO POR CÓDIGO (versión coherente con tu lógica)
+# 💰 REGISTRAR ABONO POR CÓDIGO (mensual vs mensual_interes)
 # ======================================================
 @app_rutas.route("/registrar_abono_por_codigo", methods=["POST"])
 @login_required
 def registrar_abono_por_codigo():
-    from sqlalchemy import func
+    codigo = (request.form.get("codigo") or "").strip()
 
-    codigo = request.form.get("codigo", "").strip()
-    monto = float(request.form.get("monto") or 0)
+    # monto seguro (evita ValueError si viene vacío o texto)
+    try:
+        monto = float((request.form.get("monto") or "").replace(",", "."))
+    except Exception:
+        monto = 0.0
+
     es_fetch = request.headers.get("X-Requested-With") == "fetch"
+
+    def resp_error(msg, status=400, category="danger"):
+        if es_fetch:
+            return jsonify({"ok": False, "error": msg}), status
+        flash(msg, category)
+        return redirect(url_for("app_rutas.index"))
+
+    def resp_ok(payload, msg=None):
+        if es_fetch:
+            return jsonify(payload), 200
+        if msg:
+            flash(msg, "success")
+        return redirect(url_for("app_rutas.index"))
 
     # ⚠️ Validar monto
     if monto <= 0:
-        msg = "Monto inválido."
-        return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
-            flash(msg, "danger"), redirect(url_for("app_rutas.index"))
-        )[1]
+        return resp_error("Monto inválido.", 400, "danger")
 
     # 🔍 Buscar SOLO clientes activos (no cancelados)
     cliente = Cliente.query.filter_by(codigo=codigo, cancelado=False).first()
-
     if not cliente:
-        # 👇 Aquí asumimos: o no existe, o ya está en cancelados
-        msg = f"El cliente con código {codigo} no existe o ya está cancelado."
-        return (jsonify({"ok": False, "error": msg}), 404) if es_fetch else (
-            flash(msg, "warning"), redirect(url_for("app_rutas.index"))
-        )[1]
+        return resp_error(
+            f"El cliente con código {codigo} no existe o ya está cancelado.",
+            404,
+            "warning"
+        )
 
-    # 🧮 Usar el saldo del cliente como verdad absoluta
+    # 🧮 saldo del cliente como verdad
     saldo_cliente = round(float(cliente.saldo or 0), 2)
 
-    # ⛔ Si por alguna inconsistencia el saldo está en 0 o menos, lo mandamos a cancelados
+    # ⛔ Si por inconsistencia el saldo está 0 o menos, lo mandamos a cancelados
     if saldo_cliente <= 0:
         cliente.saldo = 0.0
         cliente.cancelado = True
         db.session.commit()
-
-        msg = "Cliente sin préstamos pendientes (saldo 0, movido a cancelados)."
-        return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
-            flash(msg, "warning"), redirect(url_for("app_rutas.index"))
-        )[1]
+        return resp_error(
+            "Cliente sin préstamos pendientes (saldo 0, movido a cancelados).",
+            400,
+            "warning"
+        )
 
     # 🔎 Tomar SIEMPRE el préstamo más reciente del cliente
     prestamo = (
-        Prestamo.query.filter(
-            Prestamo.cliente_id == cliente.id
-        )
+        Prestamo.query.filter(Prestamo.cliente_id == cliente.id)
         .order_by(Prestamo.fecha.desc(), Prestamo.id.desc())
         .first()
     )
-
     if not prestamo:
-        # Caso raro: cliente activo con saldo pero sin prestamos (inconsistencia)
-        msg = "Cliente sin préstamos registrados."
-        return (jsonify({"ok": False, "error": msg}), 400) if es_fetch else (
-            flash(msg, "warning"), redirect(url_for("app_rutas.index"))
-        )[1]
+        return resp_error("Cliente sin préstamos registrados.", 400, "warning")
 
-    # 📈 Verificar interés mensual
-    interes_aplicado = False
-    dias_transcurridos = 0
-    if (prestamo.frecuencia or "").lower() == "mensual":
-        dias_transcurridos = (local_date() - (prestamo.ultima_aplicacion_interes or prestamo.fecha)).days
-        if dias_transcurridos >= 30:
-            interes_extra = prestamo.monto * (prestamo.interes or 0) / 100
-            prestamo.saldo = float(prestamo.saldo or 0) + float(interes_extra)
-            prestamo.ultima_aplicacion_interes = local_date()
-            interes_aplicado = True
+    hoy = local_date()
+    frecuencia = (prestamo.frecuencia or "").lower().strip()
 
-            db.session.add(MovimientoCaja(
-                tipo="entrada_manual",
-                monto=interes_extra,
-                descripcion=f"Interés mensual aplicado a {cliente.nombre}",
-                fecha=hora_actual()
-            ))
+    # ======================================================
+    # ✅ CASO 1: MENSUAL SOLO INTERÉS (NO baja saldo, SÍ quita alerta)
+    # ======================================================
+    if frecuencia == "mensual_interes":
+        abono = Abono(
+            prestamo_id=prestamo.id,
+            monto=monto,
+            fecha=hora_actual()
+        )
+        db.session.add(abono)
 
-    # 💵 Registrar abono
+        db.session.add(MovimientoCaja(
+            tipo="entrada_manual",  # cambia si quieres: "interes"
+            monto=monto,
+            descripcion=f"Pago interés mensual (solo interés) de {cliente.nombre}",
+            fecha=hora_actual()
+        ))
+
+        # ✅ quita la alerta visual
+        cliente.ultimo_interes_fecha = hoy
+
+        # para mostrar "Último abono" en el index
+        cliente.ultimo_abono_fecha = hoy
+
+        db.session.commit()
+        actualizar_liquidacion_por_movimiento(hoy)
+
+        return resp_ok(
+            {
+                "ok": True,
+                "cliente_id": cliente.id,
+                "cliente_nombre": cliente.nombre,
+                "saldo": float(cliente.saldo or 0),
+                "cancelado": False,
+                "monto": float(monto),
+                "interes_aplicado": True,
+                "modo": "mensual_interes"
+            },
+            msg=f"💰 Interés mensual registrado para {cliente.nombre} ✅ (se quitó la alerta)"
+        )
+
+    # ======================================================
+    # ✅ CASO 2: ABONO NORMAL (SÍ baja saldo)
+    # ======================================================
+
+    # saldo del préstamo (si no existe, usa el del cliente)
+    saldo_prestamo = round(float(getattr(prestamo, "saldo", None) or saldo_cliente), 2)
+
+    # aplicar abono
+    nuevo_saldo = round(saldo_prestamo - monto, 2)
+    if nuevo_saldo < 0:
+        nuevo_saldo = 0.0
+
+    # registrar abono
     abono = Abono(
         prestamo_id=prestamo.id,
         monto=monto,
@@ -1228,94 +1271,53 @@ def registrar_abono_por_codigo():
     )
     db.session.add(abono)
 
-    # 🔄 Actualizar saldos
-    prestamo.saldo = max(0.0, (prestamo.saldo or 0) - monto)
+    # caja
+    db.session.add(MovimientoCaja(
+        tipo="entrada_manual",
+        monto=monto,
+        descripcion=f"Abono de {cliente.nombre} (código {cliente.codigo})",
+        fecha=hora_actual()
+    ))
 
-    cliente.saldo = (
-        db.session.query(func.coalesce(func.sum(Prestamo.saldo), 0.0))
-        .filter(Prestamo.cliente_id == cliente.id)
-        .scalar()
-        or 0.0
-    )
-    cliente.ultimo_abono_fecha = local_date()
+    # actualizar saldos
+    prestamo.saldo = nuevo_saldo
+    cliente.saldo = nuevo_saldo
 
+    # para index
+    cliente.ultimo_abono_fecha = hoy
+
+    # si quieres “quitar alertas” del préstamo normal según tu lógica,
+    # acá es donde se haría (ej: cliente.ultimo_interes_fecha = hoy),
+    # pero solo si aplica en tu sistema.
+
+    # cancelar si llegó a 0
     cancelado = False
-    saldo_redondeado = round(cliente.saldo, 2)
-
-    # si queda en 0 ⇒ cancelar (y AHÍ sí pasa a cancelados)
-    if saldo_redondeado <= 0:
+    if nuevo_saldo <= 0:
+        prestamo.saldo = 0.0
         cliente.saldo = 0.0
         cliente.cancelado = True
         cancelado = True
 
     db.session.commit()
-    actualizar_liquidacion_por_movimiento(local_date())
+    actualizar_liquidacion_por_movimiento(hoy)
 
-    # ✅ Respuesta JSON o redirección
-    if es_fetch:
-        return jsonify({
+    return resp_ok(
+        {
             "ok": True,
             "cliente_id": cliente.id,
             "cliente_nombre": cliente.nombre,
-            "saldo": float(cliente.saldo),
+            "saldo": float(cliente.saldo or 0),
             "cancelado": cancelado,
-            "monto": monto,
-            "interes_aplicado": interes_aplicado
-        }), 200
-
-    # Navegador normal
-    flash(f"💰 Abono de ${monto:.2f} registrado para {cliente.nombre}", "success")
-    if cancelado:
-        flash(f"✅ {cliente.nombre} quedó en saldo 0 y fue movido a cancelados.", "info")
-    return redirect(url_for("app_rutas.index"))
-
-# ======================================================
-# 💹 GANANCIAS DEL MES — por interés
-# ======================================================
-@app_rutas.route("/ganancias_mes")
-@login_required
-def ganancias_mes_view():
-    # ✅ Se llama directamente desde el módulo tiempo
-    import tiempo
-    inicio, fin, _ahora = tiempo.mes_actual_chile_bounds()
-
-    q = (
-        db.session.query(Prestamo, Cliente)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .filter(Prestamo.fecha >= inicio, Prestamo.fecha <= fin)
-        .order_by(Prestamo.fecha.asc(), Cliente.codigo.asc())
+            "monto": float(monto),
+            "interes_aplicado": False,
+            "modo": "normal"
+        },
+        msg=f"✅ Abono registrado para {cliente.nombre}. Saldo: {cliente.saldo:.2f}"
+            + (" (cliente cancelado)" if cancelado else "")
     )
 
-    filas = []
-    total_venta = 0
-    total_ganancia = 0
 
-    for p, c in q.all():
-        venta = float(p.monto or 0)
-        interes = float(p.interes or 0)
-        ganancia = venta * (interes / 100)
-
-        filas.append({
-            "codigo": c.codigo,
-            "fecha": p.fecha,
-            "nombre": c.nombre,
-            "venta": str(int(round(venta))),
-            "interes": str(interes),
-            "ganancia": str(int(round(ganancia))),
-        })
-
-        total_venta += int(round(venta))
-        total_ganancia += int(round(ganancia))
-
-    return render_template(
-        "ganancias_mes.html",
-        filas=filas,
-        total_venta=str(total_venta),
-        total_ganancia=str(total_ganancia),
-        fecha_inicio=inicio,
-        fecha_fin=fin
-    )
-
+        
 # ======================================================
 # 🗑️ ELIMINAR ABONO (reactiva y recalcula caja histórica)
 # ======================================================
@@ -1401,6 +1403,54 @@ def eliminar_abono(abono_id):
             return jsonify({"ok": False, "error": str(e)}), 500
         flash("❌ Error interno al eliminar abono.", "danger")
         return redirect(url_for("app_rutas.index"))
+
+
+# ======================================================
+# 💹 GANANCIAS DEL MES — por interés
+# ======================================================
+@app_rutas.route("/ganancias_mes")
+@login_required
+def ganancias_mes_view():
+    # ✅ Se llama directamente desde el módulo tiempo
+    import tiempo
+    inicio, fin, _ahora = tiempo.mes_actual_chile_bounds()
+
+    q = (
+        db.session.query(Prestamo, Cliente)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .filter(Prestamo.fecha >= inicio, Prestamo.fecha <= fin)
+        .order_by(Prestamo.fecha.asc(), Cliente.codigo.asc())
+    )
+
+    filas = []
+    total_venta = 0
+    total_ganancia = 0
+
+    for p, c in q.all():
+        venta = float(p.monto or 0)
+        interes = float(p.interes or 0)
+        ganancia = venta * (interes / 100)
+
+        filas.append({
+            "codigo": c.codigo,
+            "fecha": p.fecha,
+            "nombre": c.nombre,
+            "venta": str(int(round(venta))),
+            "interes": str(interes),
+            "ganancia": str(int(round(ganancia))),
+        })
+
+        total_venta += int(round(venta))
+        total_ganancia += int(round(ganancia))
+
+    return render_template(
+        "ganancias_mes.html",
+        filas=filas,
+        total_venta=str(total_venta),
+        total_ganancia=str(total_ganancia),
+        fecha_inicio=inicio,
+        fecha_fin=fin
+    )
 
 
 # ======================================================

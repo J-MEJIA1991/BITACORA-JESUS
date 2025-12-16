@@ -2,9 +2,9 @@
 # modelos.py — versión FINAL (Créditos System, hora Chile 🇨🇱)
 # ======================================================
 
-from datetime import date
+from datetime import date, timedelta
 from extensions import db
-from tiempo import hora_actual, local_date  # ✅ Hora y fecha local chilena
+from tiempo import hora_actual, local_date
 
 
 # ---------------------------------------------------
@@ -19,21 +19,33 @@ class Cliente(db.Model):
     direccion = db.Column(db.String(255))
     telefono = db.Column(db.String(50))
     orden = db.Column(db.Integer)
-    fecha_creacion = db.Column(db.Date, default=local_date)  # ✅ Fecha local
+
+    fecha_creacion = db.Column(db.Date, default=local_date)
     cancelado = db.Column(db.Boolean, default=False)
     saldo = db.Column(db.Float, default=0.0)
+
+    # 👉 SOLO se actualiza con dinero real
     ultimo_abono_fecha = db.Column(db.Date)
 
-    # ⚠️ IMPORTANTE: usar selectin para evitar N+1 queries
+    # 👉 SOLO para mensual_interes
+    ultimo_interes_fecha = db.Column(db.Date, nullable=True)
+    proximo_interes_fecha = db.Column(db.Date, nullable=True)
+
+    # 👉 SOLO para mensual_pago
+    proximo_pago_fecha = db.Column(db.Date, nullable=True)
+
+    # ---------------------------------------------------
+    # 🔗 RELACIONES
+    # ---------------------------------------------------
     prestamos = db.relationship(
         "Prestamo",
         backref="cliente",
-        lazy="selectin",          # 👈 antes estaba lazy=True
+        lazy="selectin",
         cascade="all, delete-orphan"
     )
 
     # ---------------------------------------------------
-    # 🔹 FUNCIONES DE CÁLCULO Y ESTADO
+    # 🔹 FUNCIONES DE CÁLCULO
     # ---------------------------------------------------
     def saldo_total(self):
         if not self.prestamos:
@@ -63,11 +75,14 @@ class Cliente(db.Model):
             return 0.0
 
         frecuencia = (u.frecuencia or "diario").lower()
+
         dias_por_periodo = {
             "diario": 1,
             "semanal": 7,
             "quincenal": 15,
             "mensual": 30,
+            "mensual_interes": 30,
+            "mensual_pago": 30,
         }.get(frecuencia, 1)
 
         numero_cuotas = max(1, u.plazo // dias_por_periodo)
@@ -85,7 +100,6 @@ class Cliente(db.Model):
         if not u.plazo or not u.fecha:
             return 0
 
-        from tiempo import local_date
         dias_pasados = (local_date() - u.fecha).days
         frecuencia = (u.frecuencia or "diario").lower()
 
@@ -95,7 +109,7 @@ class Cliente(db.Model):
             cuotas = dias_pasados // 7
         elif frecuencia == "quincenal":
             cuotas = dias_pasados // 15
-        elif frecuencia == "mensual":
+        elif frecuencia in ("mensual", "mensual_interes", "mensual_pago"):
             cuotas = dias_pasados // 30
         else:
             cuotas = 0
@@ -103,75 +117,85 @@ class Cliente(db.Model):
         return min(cuotas, u.plazo)
 
     def ultimo_abono_monto(self):
-        """
-        Devuelve el monto del último abono del último préstamo,
-        o 0.0 si no hay préstamos o abonos.
-        IMPORTANTE: asume que prestamos y abonos ya vienen cargados
-        (gracias a lazy='selectin' en las relaciones y selectinload en la vista).
-        """
         if not self.prestamos:
             return 0.0
 
-        # Último préstamo por fecha
         u = max(self.prestamos, key=lambda p: p.fecha or date.min)
-
-        # Si no hay abonos en ese préstamo → 0
         if not u.abonos:
             return 0.0
 
-        # Último abono por fecha
         ultimo_abono = max(u.abonos, key=lambda a: a.fecha or date.min)
         return float(ultimo_abono.monto or 0.0)
 
     # ---------------------------------------------------
-    # 🎨 CLASES CSS PARA LA FILA (COLORES EN EL INDEX)
+    # 🎨 CLASES CSS PARA ALERTAS VISUALES
     # ---------------------------------------------------
     def clases_estado(self, hoy=None):
-        """
-        Devuelve un string con las clases CSS que debe tener la fila del cliente,
-        similar a estado_class(p) en Finanzas Aitana.
-        Ejemplo: "plazo-vencido interes-vencido"
-        """
         if hoy is None:
             hoy = local_date()
 
+        # Cancelado
+        if self.cancelado:
+            return "cancelado"
+
+        if not self.prestamos:
+            return ""
+
+        u = max(self.prestamos, key=lambda p: p.fecha or date.min)
+
+        def _d(x):
+            if not x:
+                return None
+            return x.date() if hasattr(x, "date") else x
+
+        hoy = _d(hoy)
+        fecha_inicio = _d(u.fecha)
+        freq = (u.frecuencia or "").lower()
+
         clases = []
 
-        # 1) Si está cancelado, manda primero
-        if self.cancelado:
-            clases.append("cancelado")
-            # Si quisieras que un cancelado ignore otros estados, podrías:
-            # return " ".join(clases)
+        # ===============================
+        # A) DIARIO / SEMANAL / QUINCENAL → POR PLAZO (DÍAS)
+        # ===============================
+        if freq in ("diario", "semanal", "quincenal"):
+            if fecha_inicio and u.plazo and u.plazo > 0:
+                dias = (hoy - fecha_inicio).days
+                if dias >= (u.plazo + 30):
+                    clases.append("plazo-moroso")
+                elif dias >= u.plazo:
+                    clases.append("plazo-vencido")
+            return " ".join(clases)
 
-        # 2) Colores según cuotas atrasadas (tu lógica de negocio)
-        atrasadas = 0
-        try:
-            atrasadas = self.cuotas_atrasadas() or 0
-        except Exception:
-            atrasadas = 0
+        # ===============================
+        # B) MENSUAL SOLO INTERÉS → ALERTA POR PERIODO (anclado a fecha original)
+        # ===============================
+        if freq == "mensual_interes" and fecha_inicio:
+            ult_int = _d(self.ultimo_interes_fecha)
 
-        if atrasadas >= 30:
-            clases.append("plazo-moroso")   # 🔴 rojo fuerte
-        elif atrasadas >= 1:
-            clases.append("plazo-vencido")  # 🟠 amarillo
+            dias = (hoy - fecha_inicio).days
+            if dias >= 30:
+                periodo = dias // 30
+                inicio_periodo = fecha_inicio + timedelta(days=30 * periodo)
 
-        # 3) Interés mensual vencido en préstamos MENSUALES con 30+ días
-        ultimo_prestamo = None
-        if self.prestamos:
-            ultimo_prestamo = max(self.prestamos, key=lambda p: p.fecha or date.min)
-
-        if ultimo_prestamo and not self.cancelado:
-            freq = (ultimo_prestamo.frecuencia or "diario").lower()
-            if freq == "mensual" and ultimo_prestamo.fecha:
-                f = ultimo_prestamo.fecha
-                # por si es datetime
-                if hasattr(f, "date"):
-                    f = f.date()
-                dias_desde = (hoy - f).days
-                if dias_desde >= 30:
+                if (ult_int is None) or (ult_int < inicio_periodo):
                     clases.append("interes-vencido")
 
-        return " ".join(clases)
+            return " ".join(clases)
+
+        # ===============================
+        # C) MENSUAL PAGO → 30/60 desde último abono
+        # ===============================
+        if freq in ("mensual", "mensual_pago"):
+            base = _d(self.ultimo_abono_fecha) or fecha_inicio
+            if base:
+                dias = (hoy - base).days
+                if dias >= 60:
+                    clases.append("plazo-moroso")
+                elif dias >= 30:
+                    clases.append("plazo-vencido")
+            return " ".join(clases)
+
+        return ""
 
 
 # ---------------------------------------------------
@@ -190,13 +214,11 @@ class Prestamo(db.Model):
     frecuencia = db.Column(db.String(20), default="diario")
     ultima_aplicacion_interes = db.Column(db.Date, default=local_date)  # 🕒 Nuevo
 
-    # ✅ Relación: elimina abonos al borrar préstamo
-    # ⚠️ También aquí usamos selectin para evitar N+1
     abonos = db.relationship(
         "Abono",
         backref="prestamo",
         cascade="all, delete-orphan",
-        lazy="selectin"   # 👈 antes era lazy=True
+        lazy="selectin"
     )
 
 
@@ -222,7 +244,7 @@ class MovimientoCaja(db.Model):
     tipo = db.Column(db.String(20), nullable=False)
     monto = db.Column(db.Float, nullable=False)
     descripcion = db.Column(db.String(255))
-    fecha = db.Column(db.DateTime(timezone=False), default=hora_actual)  # ✅ Igual que Deicton
+    fecha = db.Column(db.DateTime(timezone=False), default=hora_actual)
 
 
 # ---------------------------------------------------

@@ -35,15 +35,8 @@
       {% set u = (c.prestamos|sort(attribute='fecha'))|last if c.prestamos else None %}
 
       <tr id="cliente-row-{{ c.id }}"
-      class="fila-cliente
-        {% if c.cancelado %}
-          cancelado
-        {% elif c.estado_plazo and c.estado_plazo|lower == 'vencido' %}
-          plazo-vencido
-        {% elif c.estado_plazo and c.estado_plazo|lower == 'moroso' %}
-          plazo-moroso
-        {% endif %}
-      ">
+    class="fila-cliente {{ c.clases_estado(hoy) }}">
+
 
         <!-- ORDEN -->
         <td style="width:100px;">
